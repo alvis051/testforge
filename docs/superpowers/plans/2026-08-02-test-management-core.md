@@ -18,6 +18,7 @@ Source spec: `docs/superpowers/specs/2026-08-02-test-management-core-design.md`
 - Schema must stay Postgres-compatible: use `sqlalchemy.JSON`, `String(n)` with explicit lengths, and `DateTime(timezone=True)`. No SQLite-only types or pragmas.
 - Alembic migrations exist from the first table onward. Every task that adds or changes a model also adds a migration.
 - All timestamps are timezone-aware UTC.
+- Test fixtures use `starlette.testclient.TestClient` (not `httpx.Client` + `httpx.ASGITransport` directly — `ASGITransport` in the installed `httpx` is async-only and has no `handle_request`). `TestClient` is itself an `httpx.Client` subclass. The `httpx2` package is a required dev dependency so `TestClient` runs without the `StarletteDeprecationWarning` that installed `starlette` emits otherwise. This does not affect the CLI (Task 12) or the pytest plugin (Task 10), both of which use plain `httpx.Client` against real network URLs, never `ASGITransport`.
 - Every error response body is exactly `{"code": str, "message": str, "details": object}`.
 - Error codes are the fixed set: `project_not_found`, `duplicate_project_key`, `case_key_not_found`, `duplicate_case_key`, `suite_cycle`, `case_version_conflict`, `invalid_result_payload`, `run_already_completed`, `suite_not_found`, `run_not_found`.
 - Every write endpoint accepts an `X-Actor` header, defaulting to the string `local`.
@@ -207,8 +208,10 @@ Create empty `server/src/testforge/__init__.py`, `server/src/testforge/api/__ini
 - [ ] **Step 3: Install the toolchain**
 
 ```bash
-uv sync && uv add --dev pytest ruff
+uv sync && uv add --dev pytest ruff httpx2
 ```
+
+`httpx2` is a dev dependency needed only so `starlette.testclient.TestClient` (used in every test fixture from this task onward) runs without a deprecation warning — see Global Constraints.
 
 Expected: a `.venv/` is created and `uv.lock` is written.
 
@@ -217,17 +220,16 @@ Expected: a `.venv/` is created and `uv.lock` is written.
 Create `server/tests/conftest.py`:
 
 ```python
-import httpx
 import pytest
+from starlette.testclient import TestClient
 
 from testforge.main import create_app
 
 
 @pytest.fixture
-def client() -> httpx.Client:
+def client() -> TestClient:
     app = create_app()
-    transport = httpx.ASGITransport(app=app)
-    with httpx.Client(transport=transport, base_url="http://test") as c:
+    with TestClient(app) as c:
         yield c
 ```
 
@@ -669,9 +671,9 @@ Add the `client_factory` fixture to `server/tests/conftest.py` (replacing the fi
 ```python
 from collections.abc import Callable, Iterator
 
-import httpx
 import pytest
 from fastapi import APIRouter
+from starlette.testclient import TestClient
 
 from testforge.config import Settings
 from testforge.main import create_app
@@ -683,15 +685,14 @@ def settings(tmp_path) -> Settings:
 
 
 @pytest.fixture
-def client_factory(settings) -> Callable[[APIRouter | None], httpx.Client]:
-    clients: list[httpx.Client] = []
+def client_factory(settings) -> Callable[[APIRouter | None], TestClient]:
+    clients: list[TestClient] = []
 
-    def build(router: APIRouter | None = None) -> httpx.Client:
+    def build(router: APIRouter | None = None) -> TestClient:
         app = create_app(settings)
         if router is not None:
             app.include_router(router)
-        transport = httpx.ASGITransport(app=app)
-        client = httpx.Client(transport=transport, base_url="http://test")
+        client = TestClient(app)
         clients.append(client)
         return client
 
@@ -701,7 +702,7 @@ def client_factory(settings) -> Callable[[APIRouter | None], httpx.Client]:
 
 
 @pytest.fixture
-def client(client_factory) -> Iterator[httpx.Client]:
+def client(client_factory) -> Iterator[TestClient]:
     yield client_factory()
 ```
 
@@ -1339,9 +1340,7 @@ class SuiteService:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def create(
-        self, *, project: Project, name: str, parent_id: str | None, actor: str
-    ) -> Suite:
+    def create(self, *, project: Project, name: str, parent_id: str | None, actor: str) -> Suite:
         path = "/"
         if parent_id is not None:
             parent = self.get(parent_id)
@@ -1361,9 +1360,7 @@ class SuiteService:
 
     def list_for_project(self, project: Project) -> list[Suite]:
         stmt = (
-            select(Suite)
-            .where(Suite.project_id == project.id)
-            .order_by(Suite.path, Suite.position)
+            select(Suite).where(Suite.project_id == project.id).order_by(Suite.path, Suite.position)
         )
         return list(self.session.scalars(stmt))
 
@@ -1663,7 +1660,17 @@ Create `server/src/testforge/models/case.py`:
 ```python
 from datetime import datetime
 
-from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Table, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Table,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from testforge.db.base import Base, TimestampMixin
@@ -1715,9 +1722,7 @@ class TestCase(Base, TimestampMixin):
 
 class TestCaseVersion(Base):
     __tablename__ = "test_case_versions"
-    __table_args__ = (
-        UniqueConstraint("test_case_id", "version_no", name="uq_case_version_no"),
-    )
+    __table_args__ = (UniqueConstraint("test_case_id", "version_no", name="uq_case_version_no"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     test_case_id: Mapped[str] = mapped_column(
@@ -1815,9 +1820,7 @@ class CaseService:
     def get_by_key(self, case_key: str) -> TestCase:
         case = self.session.scalar(select(TestCase).where(TestCase.case_key == case_key))
         if case is None:
-            raise AppError(
-                "case_key_not_found", f"no case {case_key}", 404, {"case_key": case_key}
-            )
+            raise AppError("case_key_not_found", f"no case {case_key}", 404, {"case_key": case_key})
         return case
 
     def find_by_key(self, case_key: str) -> TestCase | None:
@@ -1909,9 +1912,7 @@ class CaseService:
         return list(self.session.scalars(stmt.order_by(TestCase.case_key)))
 
     def _tag(self, project_id: str, name: str) -> Tag:
-        tag = self.session.scalar(
-            select(Tag).where(Tag.project_id == project_id, Tag.name == name)
-        )
+        tag = self.session.scalar(select(Tag).where(Tag.project_id == project_id, Tag.name == name))
         if tag is None:
             tag = Tag(project_id=project_id, name=name)
             self.session.add(tag)
@@ -2209,9 +2210,7 @@ def list_versions(case_key: str, session: Session = Depends(get_session)) -> lis
 
 
 @router.put("/api/cases/{case_key}/tags", response_model=CaseOut)
-def set_tags(
-    case_key: str, payload: TagsSet, session: Session = Depends(get_session)
-) -> CaseOut:
+def set_tags(case_key: str, payload: TagsSet, session: Session = Depends(get_session)) -> CaseOut:
     return CaseOut.model_validate(CaseService(session).set_tags(case_key, payload.tags))
 
 
@@ -2773,9 +2772,7 @@ def test_ingest_upserts_the_automation_link(db_session, run, case):
     db_session.commit()
 
     links = AutomationService(db_session).links_for_case(case)
-    assert [link.test_identifier for link in links] == [
-        "tests/test_checkout.py::test_coupon[web]"
-    ]
+    assert [link.test_identifier for link in links] == ["tests/test_checkout.py::test_coupon[web]"]
     assert links[0].last_seen_at == EXECUTED_AT
 
 
@@ -3461,9 +3458,7 @@ def parse_junit(
     try:
         root = ElementTree.fromstring(xml)
     except ElementTree.ParseError as exc:
-        raise AppError(
-            "invalid_result_payload", f"could not parse JUnit XML: {exc}", 422
-        ) from exc
+        raise AppError("invalid_result_payload", f"could not parse JUnit XML: {exc}", 422) from exc
 
     results: list[ResultIn] = []
     for testcase in root.iter("testcase"):
@@ -3809,9 +3804,7 @@ def _post(url: str, payload: dict, *, actor: str) -> None:
         run.raise_for_status()
         run_id = run.json()["id"]
 
-        ingest = client.post(
-            f"/api/runs/{run_id}/results", json={"results": payload["results"]}
-        )
+        ingest = client.post(f"/api/runs/{run_id}/results", json={"results": payload["results"]})
         ingest.raise_for_status()
 
         client.post(f"/api/runs/{run_id}/complete").raise_for_status()
