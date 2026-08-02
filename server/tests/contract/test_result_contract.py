@@ -6,6 +6,8 @@ one result contract.
 
 import json
 
+import pytest
+from pydantic import ValidationError
 from testforge.schemas.results import ResultBatch
 
 SUITE = """
@@ -45,4 +47,7 @@ def test_plugin_emits_no_fields_the_server_rejects(pytester, tmp_path):
     pytester.runpytest("--tf-offline", str(out), "--tf-project", "CHK")
 
     payload = json.loads(out.read_text())
-    ResultBatch.model_validate({"results": payload["results"]})
+    payload["results"][0]["not_a_real_field"] = "surprise"
+
+    with pytest.raises(ValidationError):
+        ResultBatch.model_validate({"results": payload["results"]})
