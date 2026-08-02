@@ -22,6 +22,7 @@ class SuiteService:
         path = "/"
         if parent_id is not None:
             parent = self.get(parent_id)
+            self._assert_in_project(parent, project)
             path = f"{parent.path}{parent.id}/"
         suite = Suite(
             project_id=project.id,
@@ -41,11 +42,27 @@ class SuiteService:
             raise AppError("suite_not_found", f"no suite {suite_id}", 404, {"suite_id": suite_id})
         return suite
 
+    def _assert_in_project(self, suite: Suite, project: Project) -> None:
+        """A suite from another project is indistinguishable from one that does not exist."""
+        if suite.project_id != project.id:
+            raise AppError(
+                "suite_not_found",
+                f"suite {suite.id} does not belong to project {project.key}",
+                404,
+                {"suite_id": suite.id, "project_key": project.key},
+            )
+
     def list_for_project(self, project: Project) -> list[Suite]:
         stmt = (
             select(Suite).where(Suite.project_id == project.id).order_by(Suite.path, Suite.position)
         )
         return list(self.session.scalars(stmt))
+
+    def rename(self, suite_id: str, name: str, actor: str) -> Suite:
+        suite = self.get(suite_id)
+        suite.name = name
+        self.session.flush()
+        return suite
 
     def move(self, suite_id: str, new_parent_id: str | None) -> Suite:
         suite = self.get(suite_id)
@@ -59,6 +76,7 @@ class SuiteService:
                     "suite_cycle", "a suite cannot be its own parent", 409, {"suite_id": suite_id}
                 )
             parent = self.get(new_parent_id)
+            self._assert_in_project(parent, self.session.get(Project, suite.project_id))
             if parent.path.startswith(old_prefix) or parent.path == old_prefix:
                 raise AppError(
                     "suite_cycle",

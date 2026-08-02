@@ -32,7 +32,11 @@ class IngestionService:
         outcomes: Counter[str] = Counter()
 
         for incoming in results:
-            case = self.cases.find_by_key(incoming.case_key) if incoming.case_key else None
+            case = (
+                self.cases.find_by_key_in_project(incoming.case_key, run.project_id)
+                if incoming.case_key
+                else None
+            )
             version_id = None
             link_id = None
 

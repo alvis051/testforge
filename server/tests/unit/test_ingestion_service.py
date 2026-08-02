@@ -154,3 +154,32 @@ def test_ingesting_into_a_completed_run_is_rejected(db_session, run, case):
 
     assert excinfo.value.code == "run_already_completed"
     assert excinfo.value.status_code == 409
+
+
+def test_a_case_key_from_another_project_lands_unresolved(db_session, project, run):
+    other = ProjectService(db_session).create(
+        key="OTH", name="Other", description=None, actor="local"
+    )
+    foreign_case = CaseService(db_session).create(
+        project=other,
+        suite_id=None,
+        title="Foreign",
+        execution_type="automated",
+        priority="p2",
+        preconditions=None,
+        steps=[],
+        expected_result=None,
+        tags=[],
+        actor="local",
+    )
+    db_session.commit()
+
+    service = IngestionService(db_session)
+    summary = service.ingest(run=run, results=[result(case_key=foreign_case.case_key)])
+
+    assert summary.resolved == 0
+    assert summary.unresolved == 1
+
+    (stored,) = service.results_for_run(run)
+    assert stored.test_case_id is None
+    assert stored.unresolved_case_key == foreign_case.case_key

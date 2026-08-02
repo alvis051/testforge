@@ -43,7 +43,7 @@ def update_suite(
     service = SuiteService(session)
     suite = service.get(suite_id)
     if payload.name is not None:
-        suite.name = payload.name
+        suite = service.rename(suite_id, payload.name, actor)
     if payload.move:
         suite = service.move(suite_id, payload.parent_id)
     return SuiteOut.model_validate(suite)

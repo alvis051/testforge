@@ -2,6 +2,7 @@ import pytest
 from testforge.errors import AppError
 from testforge.services.case_service import CaseService
 from testforge.services.project_service import ProjectService
+from testforge.services.suite_service import SuiteService
 
 
 @pytest.fixture
@@ -124,3 +125,40 @@ def test_list_filters_by_execution_type_and_search(db_session, project):
 
     assert [c.title for c in automated] == ["Coupon applies"]
     assert [c.title for c in searched] == ["Refund flow"]
+
+
+def test_create_rejects_a_suite_from_another_project(db_session, project):
+    other = ProjectService(db_session).create(
+        key="OTH", name="Other", description=None, actor="local"
+    )
+    foreign_suite = SuiteService(db_session).create(
+        project=other, name="Foreign", parent_id=None, actor="local"
+    )
+    db_session.commit()
+
+    with pytest.raises(AppError) as excinfo:
+        make_case(db_session, project, suite_id=foreign_suite.id)
+
+    assert excinfo.value.code == "suite_not_found"
+    assert excinfo.value.status_code == 404
+
+
+def test_update_rejects_a_suite_from_another_project(db_session, project):
+    case = make_case(db_session, project)
+    other = ProjectService(db_session).create(
+        key="OTH", name="Other", description=None, actor="local"
+    )
+    foreign_suite = SuiteService(db_session).create(
+        project=other, name="Foreign", parent_id=None, actor="local"
+    )
+    db_session.commit()
+
+    with pytest.raises(AppError) as excinfo:
+        CaseService(db_session).update(
+            case_key=case.case_key,
+            expected_version_no=1,
+            actor="alvis",
+            suite_id=foreign_suite.id,
+        )
+
+    assert excinfo.value.code == "suite_not_found"

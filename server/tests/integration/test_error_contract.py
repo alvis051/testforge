@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends
+from sqlalchemy.exc import IntegrityError
 from testforge.api.deps import get_actor
 from testforge.errors import AppError
 
@@ -47,3 +48,21 @@ def test_actor_defaults_to_local_and_honours_the_header(client_factory):
     client = client_factory(router)
     assert client.get("/whoami").json() == {"actor": "local"}
     assert client.get("/whoami", headers={"X-Actor": "alvis"}).json() == {"actor": "alvis"}
+
+
+def test_integrity_error_maps_to_a_clean_409_conflict(client_factory):
+    router = APIRouter()
+
+    @router.get("/racy")
+    def racy():
+        raise IntegrityError("INSERT ...", {}, Exception("UNIQUE constraint failed"))
+
+    client = client_factory(router)
+    response = client.get("/racy")
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": "conflict",
+        "message": "the request conflicts with existing data",
+        "details": {},
+    }

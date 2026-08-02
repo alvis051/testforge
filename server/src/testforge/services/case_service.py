@@ -8,6 +8,7 @@ from testforge.errors import AppError
 from testforge.models.case import Tag, TestCase, TestCaseVersion
 from testforge.models.project import Project
 from testforge.services.project_service import ProjectService
+from testforge.services.suite_service import SuiteService
 
 VERSIONED_FIELDS = (
     "title",
@@ -37,6 +38,8 @@ class CaseService:
         tags: list[str],
         actor: str,
     ) -> TestCase:
+        if suite_id is not None:
+            self._assert_suite_in_project(suite_id, project)
         case_key = ProjectService(self.session).allocate_case_key(project)
         case = TestCase(
             project_id=project.id,
@@ -68,6 +71,19 @@ class CaseService:
         """Lookup that returns ``None`` instead of raising — used by ingestion."""
         return self.session.scalar(select(TestCase).where(TestCase.case_key == case_key))
 
+    def find_by_key_in_project(self, case_key: str, project_id: str) -> TestCase | None:
+        """Project-scoped lookup. A case in another project resolves as ``None``.
+
+        Ingestion uses this so a run can never bind a result to a case belonging to
+        a different project: such a key is simply unresolved, not an error.
+        """
+        return self.session.scalar(
+            select(TestCase).where(
+                TestCase.case_key == case_key,
+                TestCase.project_id == project_id,
+            )
+        )
+
     def update(
         self,
         *,
@@ -84,6 +100,10 @@ class CaseService:
                 f"case {case_key} has moved on to version {case.current_version_no}",
                 409,
                 {"case_key": case_key, "current_version_no": case.current_version_no},
+            )
+        if fields.get("suite_id") is not None:
+            self._assert_suite_in_project(
+                fields["suite_id"], self.session.get(Project, case.project_id)
             )
         for name, value in fields.items():
             if name not in VERSIONED_FIELDS and name not in {"suite_id", "status", "owner"}:
@@ -152,6 +172,17 @@ class CaseService:
         if tag is not None:
             stmt = stmt.where(TestCase.tags.any(Tag.name == tag))
         return list(self.session.scalars(stmt.order_by(TestCase.case_key)))
+
+    def _assert_suite_in_project(self, suite_id: str, project: Project) -> None:
+        """A suite from another project is indistinguishable from one that does not exist."""
+        suite = SuiteService(self.session).get(suite_id)
+        if suite.project_id != project.id:
+            raise AppError(
+                "suite_not_found",
+                f"suite {suite_id} does not belong to project {project.key}",
+                404,
+                {"suite_id": suite_id, "project_key": project.key},
+            )
 
     def _tag(self, project_id: str, name: str) -> Tag:
         tag = self.session.scalar(select(Tag).where(Tag.project_id == project_id, Tag.name == name))

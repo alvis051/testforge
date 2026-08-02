@@ -114,7 +114,7 @@ def import_junit(
 ) -> IngestSummary:
     project = ProjectService(session).get_by_key(project_key)
     executed_at = utcnow()
-    results = parse_junit(payload.xml, default_executed_at=executed_at)
+    results = parse_junit(payload.xml, project_key=project.key, default_executed_at=executed_at)
 
     run_service = RunService(session)
     run, _ = run_service.open(

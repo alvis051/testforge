@@ -69,3 +69,45 @@ def test_move_into_itself_raises_suite_cycle(db_session, project):
     with pytest.raises(AppError) as excinfo:
         service.move(web.id, web.id)
     assert excinfo.value.code == "suite_cycle"
+
+
+def test_create_rejects_a_parent_from_another_project(db_session, project):
+    service = SuiteService(db_session)
+    other = ProjectService(db_session).create(
+        key="OTH", name="Other", description=None, actor="local"
+    )
+    foreign_parent = service.create(project=other, name="Foreign", parent_id=None, actor="local")
+    db_session.commit()
+
+    with pytest.raises(AppError) as excinfo:
+        service.create(project=project, name="Smoke", parent_id=foreign_parent.id, actor="local")
+
+    assert excinfo.value.code == "suite_not_found"
+    assert excinfo.value.status_code == 404
+
+
+def test_move_rejects_a_new_parent_from_another_project(db_session, project):
+    service = SuiteService(db_session)
+    suite = service.create(project=project, name="Smoke", parent_id=None, actor="local")
+    other = ProjectService(db_session).create(
+        key="OTH", name="Other", description=None, actor="local"
+    )
+    foreign_parent = service.create(project=other, name="Foreign", parent_id=None, actor="local")
+    db_session.commit()
+
+    with pytest.raises(AppError) as excinfo:
+        service.move(suite.id, foreign_parent.id)
+
+    assert excinfo.value.code == "suite_not_found"
+
+
+def test_rename_goes_through_the_service(db_session, project):
+    service = SuiteService(db_session)
+    suite = service.create(project=project, name="Smoke", parent_id=None, actor="local")
+    db_session.commit()
+
+    renamed = service.rename(suite.id, "Regression", actor="alvis")
+
+    assert renamed.id == suite.id
+    assert renamed.name == "Regression"
+    assert service.get(suite.id).name == "Regression"

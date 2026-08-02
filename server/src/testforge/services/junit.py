@@ -5,12 +5,19 @@ from xml.etree import ElementTree
 from testforge.errors import AppError
 from testforge.schemas.results import ResultIn
 
-CASE_KEY_PATTERN = re.compile(r"\b([A-Z][A-Z0-9]*-\d+)\b")
+
+def case_key_pattern(project_key: str) -> re.Pattern[str]:
+    """Fallback name pattern, scoped to the importing project's own key prefix.
+
+    An unscoped pattern would happily read ``UTF-8`` out of ``test_decode[UTF-8]``.
+    """
+    return re.compile(rf"\b({re.escape(project_key)}-\d+)\b")
 
 
 def parse_junit(
-    xml: str, *, framework: str = "junit", default_executed_at: datetime
+    xml: str, *, project_key: str, framework: str = "junit", default_executed_at: datetime
 ) -> list[ResultIn]:
+    pattern = case_key_pattern(project_key)
     try:
         root = ElementTree.fromstring(xml)
     except ElementTree.ParseError as exc:
@@ -35,7 +42,7 @@ def parse_junit(
 
         results.append(
             ResultIn(
-                case_key=_case_key(testcase, name),
+                case_key=_case_key(testcase, name, pattern),
                 test_identifier=identifier,
                 framework=framework,
                 outcome=outcome,
@@ -49,11 +56,11 @@ def parse_junit(
     return results
 
 
-def _case_key(testcase: ElementTree.Element, name: str) -> str | None:
+def _case_key(testcase: ElementTree.Element, name: str, pattern: re.Pattern[str]) -> str | None:
     for prop in testcase.iter("property"):
         if prop.get("name") == "case_key" and prop.get("value"):
             return prop.get("value")
-    match = CASE_KEY_PATTERN.search(name)
+    match = pattern.search(name)
     return match.group(1) if match else None
 
 

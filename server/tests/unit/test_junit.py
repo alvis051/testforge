@@ -23,7 +23,7 @@ XML = """<?xml version="1.0" encoding="utf-8"?>
 
 
 def test_case_key_comes_from_the_property_first():
-    results = parse_junit(XML, default_executed_at=NOW)
+    results = parse_junit(XML, project_key="CHK", default_executed_at=NOW)
     coupon = next(r for r in results if r.test_identifier.endswith("test_coupon"))
     assert coupon.case_key == "CHK-1"
     assert coupon.outcome == "passed"
@@ -31,7 +31,7 @@ def test_case_key_comes_from_the_property_first():
 
 
 def test_case_key_falls_back_to_a_pattern_match_on_the_name():
-    results = parse_junit(XML, default_executed_at=NOW)
+    results = parse_junit(XML, project_key="CHK", default_executed_at=NOW)
     login = next(r for r in results if "test_login" in r.test_identifier)
     assert login.case_key == "CHK-2"
     assert login.outcome == "failed"
@@ -40,17 +40,48 @@ def test_case_key_falls_back_to_a_pattern_match_on_the_name():
 
 
 def test_unannotated_test_yields_no_case_key():
-    results = parse_junit(XML, default_executed_at=NOW)
+    results = parse_junit(XML, project_key="CHK", default_executed_at=NOW)
     orphan = next(r for r in results if r.test_identifier.endswith("test_orphan"))
     assert orphan.case_key is None
 
 
 def test_skipped_outcome_is_mapped():
-    results = parse_junit(XML, default_executed_at=NOW)
+    results = parse_junit(XML, project_key="CHK", default_executed_at=NOW)
     skipped = next(r for r in results if r.test_identifier.endswith("test_skipped"))
     assert skipped.outcome == "skipped"
 
 
 def test_test_identifier_combines_classname_and_name():
-    results = parse_junit(XML, default_executed_at=NOW)
+    results = parse_junit(XML, project_key="CHK", default_executed_at=NOW)
     assert "tests.test_checkout::test_coupon" in {r.test_identifier for r in results}
+
+
+PRECEDENCE_XML = """<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+  <testsuite name="pytest" tests="1">
+    <testcase classname="tests.test_thing" name="test_thing CHK-99" time="0.1">
+      <properties><property name="case_key" value="CHK-1"/></properties>
+    </testcase>
+  </testsuite>
+</testsuites>
+"""
+
+
+def test_the_property_wins_over_a_name_that_also_matches_the_pattern():
+    (result,) = parse_junit(PRECEDENCE_XML, project_key="CHK", default_executed_at=NOW)
+    assert result.case_key == "CHK-1"
+
+
+FOREIGN_KEY_XML = """<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+  <testsuite name="pytest" tests="2">
+    <testcase classname="tests.test_codec" name="test_decode[UTF-8]" time="0.1"/>
+    <testcase classname="tests.test_other" name="test_other OTH-7" time="0.1"/>
+  </testsuite>
+</testsuites>
+"""
+
+
+def test_the_fallback_pattern_only_matches_the_importing_projects_key():
+    results = parse_junit(FOREIGN_KEY_XML, project_key="CHK", default_executed_at=NOW)
+    assert [r.case_key for r in results] == [None, None]

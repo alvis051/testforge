@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 
 
 class AppError(Exception):
@@ -26,6 +27,18 @@ def register_error_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=error.status_code,
             content={"code": error.code, "message": error.message, "details": error.details},
+        )
+
+    @app.exception_handler(IntegrityError)
+    def handle_integrity_error(_: Request, __: IntegrityError) -> JSONResponse:
+        """Catch-all for constraint violations that no service pre-empted with its own code."""
+        return JSONResponse(
+            status_code=409,
+            content={
+                "code": "conflict",
+                "message": "the request conflicts with existing data",
+                "details": {},
+            },
         )
 
     @app.exception_handler(RequestValidationError)
