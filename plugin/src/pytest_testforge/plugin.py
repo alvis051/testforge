@@ -13,6 +13,7 @@ import httpx
 import pytest
 
 _RESULTS_KEY = pytest.StashKey[list]()
+_BY_NODEID_KEY = pytest.StashKey[dict]()
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -28,33 +29,38 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line("markers", "case(key): link this test to a TestForge case key")
     config.stash[_RESULTS_KEY] = []
+    config.stash[_BY_NODEID_KEY] = {}
 
 
 def _case_keys(item: pytest.Item) -> list[str]:
     return [mark.args[0] for mark in item.iter_markers(name="case") if mark.args]
 
 
-@pytest.hookimpl(hookwrapper=True)
-def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):
-    outcome = yield
-    report = outcome.get_result()
-    if report.when != "call" and not (report.when == "setup" and report.outcome == "skipped"):
-        return
+def _failure_details(report, call: pytest.CallInfo) -> tuple[str | None, str | None, str | None]:
+    """Return (failure_type, failure_message, stack_trace) for one phase's report/call.
 
-    if report.outcome == "passed":
-        result_outcome = "passed"
-    elif report.outcome == "skipped":
-        result_outcome = "skipped"
-    else:
-        result_outcome = "failed"
+    ``call`` is phase-specific: during a setup or teardown report it carries that phase's
+    exception info, not the test body's.
+    """
+    if report.longrepr is None:
+        return None, None, None
 
-    failure_message = None
-    stack_trace = None
-    failure_type = None
-    if report.longrepr is not None and result_outcome == "failed":
-        stack_trace = str(report.longrepr)
-        failure_message = stack_trace.strip().splitlines()[-1] if stack_trace else None
-        failure_type = getattr(getattr(call, "excinfo", None), "typename", None)
+    stack_trace = str(report.longrepr)
+    excinfo = getattr(call, "excinfo", None)
+    if excinfo is not None:
+        return excinfo.typename, excinfo.exconly(), stack_trace
+
+    fallback = stack_trace.strip().splitlines()[-1] if stack_trace.strip() else None
+    return None, fallback, stack_trace
+
+
+def _record(item: pytest.Item, report, call: pytest.CallInfo, result_outcome: str) -> None:
+    """Append one result per case key (or a single unmarked result) for this test."""
+    failure_type, failure_message, stack_trace = (
+        _failure_details(report, call)
+        if result_outcome in ("failed", "error")
+        else (None, None, None)
+    )
 
     base = {
         "test_identifier": item.nodeid,
@@ -69,11 +75,51 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):
     }
 
     keys = _case_keys(item)
-    collected = item.config.stash[_RESULTS_KEY]
-    if keys:
-        collected.extend({**base, "case_key": key} for key in keys)
-    else:
-        collected.append({**base, "case_key": None})
+    entries = [{**base, "case_key": key} for key in keys] if keys else [{**base, "case_key": None}]
+
+    # The ordered list drives payload ordering; the per-nodeid index holds the SAME dict
+    # objects so a later phase can upgrade a recorded result in place.
+    item.config.stash[_RESULTS_KEY].extend(entries)
+    item.config.stash[_BY_NODEID_KEY].setdefault(item.nodeid, []).extend(entries)
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):
+    outcome = yield
+    report = outcome.get_result()
+
+    if report.when == "setup":
+        if report.outcome == "skipped":
+            _record(item, report, call, "skipped")
+        elif report.outcome != "passed":
+            # Setup failed: the call phase never runs, so this is the test's only report.
+            _record(item, report, call, "error")
+        return
+
+    if report.when == "call":
+        if report.outcome == "passed":
+            result_outcome = "passed"
+        elif report.outcome == "skipped":
+            result_outcome = "skipped"  # covers xfail
+        else:
+            result_outcome = "failed"
+        _record(item, report, call, result_outcome)
+        return
+
+    if report.when == "teardown" and report.outcome not in ("passed", "skipped"):
+        # Teardown errored: upgrade whatever this test already recorded to "error" so a
+        # passing call phase is not reported as a clean pass.
+        recorded = item.config.stash[_BY_NODEID_KEY].get(item.nodeid)
+        if not recorded:
+            _record(item, report, call, "error")
+            return
+
+        failure_type, failure_message, stack_trace = _failure_details(report, call)
+        for entry in recorded:
+            entry["outcome"] = "error"
+            entry["failure_type"] = entry["failure_type"] or failure_type
+            entry["failure_message"] = entry["failure_message"] or failure_message
+            entry["stack_trace"] = entry["stack_trace"] or stack_trace
 
 
 def build_payload(config: pytest.Config) -> dict:
@@ -100,8 +146,15 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     reporter = config.pluginmanager.get_plugin("terminalreporter")
 
     if offline_path:
-        with open(offline_path, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, indent=2)
+        try:
+            with open(offline_path, "w", encoding="utf-8") as handle:
+                json.dump(payload, handle, indent=2)
+        except Exception as exc:  # noqa: BLE001 — reporting must never break a test run
+            if reporter:
+                reporter.write_line(
+                    f"testforge: could not write results to {offline_path} ({exc})", yellow=True
+                )
+            return
         if reporter:
             count = len(payload["results"])
             reporter.write_line(f"testforge: wrote {count} results to {offline_path}")

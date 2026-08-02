@@ -39,7 +39,10 @@ def test_offline_mode_writes_the_result_payload(pytester, tmp_path):
     by_case = {r["case_key"]: r for r in payload["results"] if r["case_key"]}
     assert by_case["CHK-1"]["outcome"] == "passed"
     assert by_case["CHK-2"]["outcome"] == "failed"
-    assert by_case["CHK-2"]["failure_message"]
+    assert "1 == 2" in by_case["CHK-2"]["failure_message"], (
+        "failure_message is the exception message, not the traceback's location line"
+    )
+    assert by_case["CHK-2"]["failure_type"] == "AssertionError"
     assert "CHK-3" in by_case and "CHK-4" in by_case, "a repeated marker emits one result per case"
 
 
@@ -60,6 +63,79 @@ def test_plugin_is_inert_without_options(pytester):
     result = pytester.runpytest()
 
     result.assert_outcomes(passed=3, failed=1)
+
+
+SETUP_ERROR_SUITE = """
+import pytest
+
+@pytest.fixture
+def broken():
+    raise RuntimeError("fixture exploded during setup")
+
+def test_needs_broken_fixture(broken):
+    assert True
+"""
+
+TEARDOWN_ERROR_SUITE = """
+import pytest
+
+@pytest.fixture
+def leaky():
+    yield
+    raise RuntimeError("fixture exploded during teardown")
+
+def test_passes_then_teardown_errors(leaky):
+    assert True
+"""
+
+
+def test_setup_errors_are_recorded_rather_than_dropped(pytester, tmp_path):
+    pytester.makepyfile(test_suite=SETUP_ERROR_SUITE)
+    out = tmp_path / "results.json"
+
+    result = pytester.runpytest("--tf-offline", str(out), "--tf-project", "CHK")
+
+    result.assert_outcomes(errors=1)
+    payload = json.loads(out.read_text())
+
+    results = [
+        r
+        for r in payload["results"]
+        if r["test_identifier"] == "test_suite.py::test_needs_broken_fixture"
+    ]
+    assert len(results) == 1, "a setup error contributes exactly one result, not zero"
+    assert results[0]["outcome"] == "error"
+    assert results[0]["failure_type"] == "RuntimeError"
+    assert "fixture exploded during setup" in results[0]["failure_message"]
+
+
+def test_teardown_errors_are_not_reported_as_passed(pytester, tmp_path):
+    pytester.makepyfile(test_suite=TEARDOWN_ERROR_SUITE)
+    out = tmp_path / "results.json"
+
+    result = pytester.runpytest("--tf-offline", str(out), "--tf-project", "CHK")
+
+    result.assert_outcomes(passed=1, errors=1)
+    payload = json.loads(out.read_text())
+
+    results = [
+        r
+        for r in payload["results"]
+        if r["test_identifier"] == "test_suite.py::test_passes_then_teardown_errors"
+    ]
+    assert len(results) == 1, "the teardown failure upgrades the call result, it does not duplicate"
+    assert results[0]["outcome"] == "error", "a teardown failure must not be reported as passed"
+    assert "fixture exploded during teardown" in results[0]["failure_message"]
+
+
+def test_unwritable_offline_path_warns_but_does_not_fail_the_run(pytester, tmp_path):
+    pytester.makepyfile(test_suite="def test_ok():\n    assert True\n")
+    out = tmp_path / "nonexistent_dir" / "results.json"
+
+    result = pytester.runpytest("--tf-offline", str(out), "--tf-project", "CHK")
+
+    assert result.ret == 0
+    result.stdout.fnmatch_lines(["*testforge: could not write results*"])
 
 
 def test_unreachable_server_warns_but_does_not_fail_the_run(pytester):
