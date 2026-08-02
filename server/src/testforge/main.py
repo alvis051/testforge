@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from testforge.api.routes import cases, health, projects, suites
+from testforge.api.routes import cases, health, projects, runs, suites
 from testforge.config import Settings, get_settings
 from testforge.db.session import create_session_factory
 from testforge.errors import register_error_handlers
@@ -16,4 +16,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(projects.router)
     app.include_router(suites.router)
     app.include_router(cases.router)
+    app.include_router(runs.router)
     return app

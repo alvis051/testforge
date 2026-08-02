@@ -1,9 +1,9 @@
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from testforge.db.base import Base, TimestampMixin, utcnow
+from testforge.db.base import Base, TimestampMixin, UTCDateTime, utcnow
 from testforge.ids import new_id
 
 
@@ -24,10 +24,8 @@ class Run(Base, TimestampMixin):
     plan_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     ci_metadata_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     created_by: Mapped[str] = mapped_column(String(200), nullable=False, default="local")
-    started_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=utcnow
-    )
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    started_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
 
 
 class Result(Base):
@@ -54,4 +52,4 @@ class Result(Base):
     failure_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     stack_trace: Mapped[str | None] = mapped_column(Text, nullable=True)
     attachments_json: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
-    executed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    executed_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)

@@ -3,7 +3,6 @@ from datetime import datetime
 from sqlalchemy import (
     JSON,
     Column,
-    DateTime,
     ForeignKey,
     Integer,
     String,
@@ -13,7 +12,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from testforge.db.base import Base, TimestampMixin
+from testforge.db.base import Base, TimestampMixin, UTCDateTime
 from testforge.ids import new_id
 
 test_case_tags = Table(
@@ -55,7 +54,7 @@ class TestCase(Base, TimestampMixin):
     current_version_no: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_by: Mapped[str] = mapped_column(String(200), nullable=False, default="local")
     updated_by: Mapped[str] = mapped_column(String(200), nullable=False, default="local")
-    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    archived_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
 
     tags: Mapped[list[Tag]] = relationship(secondary=test_case_tags, lazy="selectin")
 
@@ -77,4 +76,4 @@ class TestCaseVersion(Base):
     expected_result: Mapped[str | None] = mapped_column(Text, nullable=True)
     change_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[str] = mapped_column(String(200), nullable=False, default="local")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)

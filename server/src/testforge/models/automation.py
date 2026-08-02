@@ -1,9 +1,9 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from testforge.db.base import Base
+from testforge.db.base import Base, UTCDateTime
 from testforge.ids import new_id
 
 
@@ -19,6 +19,6 @@ class AutomationLink(Base):
     )
     framework: Mapped[str] = mapped_column(String(50), nullable=False)
     test_identifier: Mapped[str] = mapped_column(String(1000), nullable=False)
-    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    first_seen_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
