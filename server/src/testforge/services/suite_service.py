@@ -10,13 +10,26 @@ class SuiteService:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def create(self, *, project: Project, name: str, parent_id: str | None, actor: str) -> Suite:
+    def create(
+        self,
+        *,
+        project: Project,
+        name: str,
+        parent_id: str | None,
+        actor: str,
+        description: str | None = None,
+    ) -> Suite:
         path = "/"
         if parent_id is not None:
             parent = self.get(parent_id)
             path = f"{parent.path}{parent.id}/"
         suite = Suite(
-            project_id=project.id, parent_id=parent_id, name=name, path=path, created_by=actor
+            project_id=project.id,
+            parent_id=parent_id,
+            name=name,
+            path=path,
+            created_by=actor,
+            description=description,
         )
         self.session.add(suite)
         self.session.flush()

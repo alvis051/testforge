@@ -18,7 +18,11 @@ def create_suite(
 ) -> SuiteOut:
     project = ProjectService(session).get_by_key(project_key)
     suite = SuiteService(session).create(
-        project=project, name=payload.name, parent_id=payload.parent_id, actor=actor
+        project=project,
+        name=payload.name,
+        parent_id=payload.parent_id,
+        actor=actor,
+        description=payload.description,
     )
     return SuiteOut.model_validate(suite)
 
@@ -31,7 +35,10 @@ def list_suites(project_key: str, session: Session = Depends(get_session)) -> li
 
 @router.patch("/api/suites/{suite_id}", response_model=SuiteOut)
 def update_suite(
-    suite_id: str, payload: SuiteUpdate, session: Session = Depends(get_session)
+    suite_id: str,
+    payload: SuiteUpdate,
+    session: Session = Depends(get_session),
+    actor: str = Depends(get_actor),
 ) -> SuiteOut:
     service = SuiteService(session)
     suite = service.get(suite_id)
