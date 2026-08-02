@@ -142,3 +142,22 @@ def test_automation_links_appear_on_the_case(client, setup):
     assert [link["test_identifier"] for link in links] == [
         "tests/test_checkout.py::test_coupon[web]"
     ]
+
+
+def test_run_timestamps_are_timezone_aware_across_a_fresh_request(client, setup):
+    from datetime import datetime
+
+    run_id = open_run(client).json()["id"]
+
+    # A GET is a genuinely separate HTTP request/session from the POST above —
+    # this is exactly the fresh-session path where SQLite silently drops tzinfo
+    # unless the UTCDateTime type decorator (server/src/testforge/db/base.py)
+    # re-attaches it on read.
+    fetched = client.get(f"/api/runs/{run_id}")
+    started_at = fetched.json()["started_at"]
+
+    parsed = datetime.fromisoformat(started_at)
+    assert parsed.tzinfo is not None, (
+        f"started_at={started_at!r} round-tripped through a fresh session without "
+        "timezone info — the UTCDateTime fix has regressed"
+    )
