@@ -17,3 +17,9 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run pytest -v
+      - name: Smoke — migrate and seed
+        run: |
+          uv run alembic -c server/alembic.ini upgrade head
+          uv run tf seed
+        env:
+          TESTFORGE_DATABASE_URL: sqlite:///./ci.db

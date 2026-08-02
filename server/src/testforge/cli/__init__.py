@@ -4,6 +4,9 @@ from pathlib import Path
 import typer
 
 from testforge.cli.client import ApiClient
+from testforge.config import get_settings
+from testforge.db.session import create_session_factory
+from testforge.seed import seed_demo
 
 app = typer.Typer(help="TestForge CLI")
 project_app = typer.Typer(help="Manage projects")
@@ -101,3 +104,16 @@ def run_upload(payload_path: Path) -> None:
     summary = api.post(f"/api/runs/{run['id']}/results", json={"results": payload["results"]})
     api.post(f"/api/runs/{run['id']}/complete")
     typer.echo(json.dumps(summary, indent=2))
+
+
+@app.command("seed")
+def seed() -> None:
+    """Create the demo project directly in the database."""
+    factory = create_session_factory(get_settings().database_url)
+    session = factory()
+    try:
+        counts = seed_demo(session)
+        session.commit()
+    finally:
+        session.close()
+    typer.echo(json.dumps(counts, indent=2))

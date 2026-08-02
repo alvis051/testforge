@@ -1,4 +1,4 @@
-.PHONY: install dev test lint fmt
+.PHONY: install dev test lint fmt migrate seed demo
 
 install:
 	uv sync
@@ -14,3 +14,12 @@ lint:
 
 fmt:
 	uv run ruff format .
+
+migrate:
+	uv run alembic -c server/alembic.ini upgrade head
+
+seed: migrate
+	uv run tf seed
+
+demo: seed
+	@echo "Start the API with 'make dev', then: uv run tf case list CHK"
