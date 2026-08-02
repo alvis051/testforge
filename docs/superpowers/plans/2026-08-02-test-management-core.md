@@ -3571,13 +3571,15 @@ git commit -m "feat: import JUnit XML through the shared ingestion path"
 
 ### Task 10: pytest plugin
 
+**Post-implementation note (2026-08-03):** the code block below, as originally written, had two real Critical bugs — the `pytest_runtest_makereport` guard silently dropped setup-phase errors, and worse, reported call-pass-then-teardown-fail as `outcome="passed"` (a false-positive quality signal, not just a gap). It also crashed the whole pytest run with `INTERNALERROR` if `--tf-offline` pointed at an unwritable path. Both were found and fixed in review at commit `e07c1da` (on top of the original `08d916e`) — see `pytest_runtest_makereport`'s actual per-phase dispatch and the `_failure_details`/`_record` helpers in `plugin/src/pytest_testforge/plugin.py` for the corrected version; the code block below is left as originally planned for historical reference but should not be re-derived verbatim. The "Produces" line's `build_payload(reports, external_id, name)` signature below was also always inconsistent with the code (`build_payload(config)`); the code is correct, the prose was a documentation error with no downstream impact (nothing calls it with 3 positional args).
+
 **Files:**
 - Create: `plugin/src/pytest_testforge/plugin.py`
 - Test: `plugin/tests/test_plugin.py` (the `pytester` fixture comes from the root `conftest.py` written in Task 1)
 
 **Interfaces:**
 - Consumes: nothing from the server package — the plugin stays dependency-free of `testforge` so client repos can install it alone.
-- Produces: pytest options `--tf-url`, `--tf-project`, `--tf-external-id`, `--tf-run-name`, `--tf-offline`; marker `case`; module function `build_payload(reports, external_id, name) -> dict`.
+- Produces: pytest options `--tf-url`, `--tf-project`, `--tf-external-id`, `--tf-run-name`, `--tf-offline`; marker `case`; module function `build_payload(config) -> dict`.
 
 - [ ] **Step 1: Write the failing tests**
 
