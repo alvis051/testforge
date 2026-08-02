@@ -1,14 +1,17 @@
 from collections import Counter
 
 from fastapi import APIRouter, Depends, Response
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from testforge.api.deps import get_actor, get_session
+from testforge.db.base import utcnow
 from testforge.schemas.results import IngestSummary, ResultBatch
 from testforge.schemas.runs import AutomationLinkOut, ResultOut, RunCreate, RunOut, RunSummaryOut
 from testforge.services.automation_service import AutomationService
 from testforge.services.case_service import CaseService
 from testforge.services.ingestion_service import IngestionService
+from testforge.services.junit import parse_junit
 from testforge.services.project_service import ProjectService
 from testforge.services.run_service import RunService
 
@@ -94,3 +97,34 @@ def list_automation_links(
     case = CaseService(session).get_by_key(case_key)
     links = AutomationService(session).links_for_case(case)
     return [AutomationLinkOut.model_validate(link) for link in links]
+
+
+class JUnitImport(BaseModel):
+    external_id: str = Field(min_length=1, max_length=200)
+    name: str | None = None
+    xml: str
+
+
+@router.post("/api/projects/{project_key}/runs/import-junit", response_model=IngestSummary)
+def import_junit(
+    project_key: str,
+    payload: JUnitImport,
+    session: Session = Depends(get_session),
+    actor: str = Depends(get_actor),
+) -> IngestSummary:
+    project = ProjectService(session).get_by_key(project_key)
+    executed_at = utcnow()
+    results = parse_junit(payload.xml, default_executed_at=executed_at)
+
+    run_service = RunService(session)
+    run, _ = run_service.open(
+        project=project,
+        external_id=payload.external_id,
+        name=payload.name,
+        source="ci",
+        ci_metadata={"import": "junit"},
+        actor=actor,
+    )
+    summary = IngestionService(session).ingest(run=run, results=results)
+    run_service.complete(run.id)
+    return summary
