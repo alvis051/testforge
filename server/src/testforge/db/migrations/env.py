@@ -1,3 +1,4 @@
+import os
 from logging.config import fileConfig
 
 from alembic import context
@@ -9,6 +10,19 @@ from testforge.db.base import Base
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+# CI (and any other caller) can redirect migrations to a different database by
+# setting TESTFORGE_DATABASE_URL in the environment. This takes priority over
+# both the ini's static default and any config-API override (e.g. the one
+# test_migrations.py applies via config.set_main_option), because it's an
+# explicit, intentional signal from the caller's environment. We check the
+# env var directly rather than via get_settings() so that this only fires
+# when the env var is actually set — get_settings() would otherwise always
+# return a value (its own default) and unconditionally clobber per-test
+# overrides that never touch the environment.
+_env_database_url = os.environ.get("TESTFORGE_DATABASE_URL")
+if _env_database_url:
+    config.set_main_option("sqlalchemy.url", _env_database_url)
 
 if not config.get_main_option("sqlalchemy.url", "").strip():
     config.set_main_option("sqlalchemy.url", get_settings().database_url)
