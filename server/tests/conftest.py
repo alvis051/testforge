@@ -3,7 +3,6 @@ from collections.abc import Callable, Iterator
 import pytest
 from fastapi import APIRouter
 from starlette.testclient import TestClient
-
 from testforge.config import Settings
 from testforge.main import create_app
 
