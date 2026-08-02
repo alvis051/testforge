@@ -291,8 +291,7 @@ Define a provider interface:
 
 ```python
 class LLMProvider(Protocol):
-    async def generate(self, request: LLMRequest) -> LLMResponse:
-        ...
+    async def generate(self, request: LLMRequest) -> LLMResponse: ...
 ```
 
 `LLMRequest` should include:
@@ -1012,8 +1011,7 @@ class Scorer(Protocol):
     name: str
     scorer_type: str
 
-    async def score(self, context: ScoringContext) -> ScoreResult:
-        ...
+    async def score(self, context: ScoringContext) -> ScoreResult: ...
 ```
 
 `ScoringContext` includes:
