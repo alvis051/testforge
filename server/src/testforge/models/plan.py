@@ -29,9 +29,7 @@ class TestPlanCase(Base):
 
     __tablename__ = "test_plan_cases"
 
-    plan_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("test_plans.id"), primary_key=True
-    )
+    plan_id: Mapped[str] = mapped_column(String(36), ForeignKey("test_plans.id"), primary_key=True)
     test_case_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("test_cases.id"), primary_key=True
     )
