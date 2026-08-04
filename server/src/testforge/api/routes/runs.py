@@ -6,12 +6,23 @@ from sqlalchemy.orm import Session
 
 from testforge.api.deps import get_actor, get_session
 from testforge.db.base import utcnow
+from testforge.models.case import TestCase
 from testforge.schemas.results import IngestSummary, ResultBatch
-from testforge.schemas.runs import AutomationLinkOut, ResultOut, RunCreate, RunOut, RunSummaryOut
+from testforge.schemas.runs import (
+    AutomationLinkOut,
+    ManualExecute,
+    PlanProgress,
+    ResultOut,
+    RunCreate,
+    RunOut,
+    RunSummaryOut,
+)
 from testforge.services.automation_service import AutomationService
 from testforge.services.case_service import CaseService
 from testforge.services.ingestion_service import IngestionService
 from testforge.services.junit import parse_junit
+from testforge.services.manual_service import ManualExecutionService
+from testforge.services.plan_service import PlanService
 from testforge.services.project_service import ProjectService
 from testforge.services.run_service import RunService
 
@@ -57,6 +68,33 @@ def complete_run(
     return RunOut.model_validate(RunService(session).complete(run_id))
 
 
+@router.post("/api/runs/{run_id}/cancel", response_model=RunOut)
+def cancel_run(
+    run_id: str, session: Session = Depends(get_session), actor: str = Depends(get_actor)
+) -> RunOut:
+    return RunOut.model_validate(RunService(session).cancel(run_id))
+
+
+@router.post("/api/runs/{run_id}/cases/{case_key}/execute", response_model=ResultOut)
+def execute_case_manually(
+    run_id: str,
+    case_key: str,
+    payload: ManualExecute,
+    session: Session = Depends(get_session),
+    actor: str = Depends(get_actor),
+) -> ResultOut:
+    run = RunService(session).get(run_id)
+    result = ManualExecutionService(session).record(
+        run=run,
+        case_key=case_key,
+        outcome=payload.outcome,
+        notes=payload.notes,
+        duration_ms=payload.duration_ms,
+        actor=actor,
+    )
+    return ResultOut.model_validate(result)
+
+
 @router.get("/api/runs/{run_id}", response_model=RunSummaryOut)
 def get_run(run_id: str, session: Session = Depends(get_session)) -> RunSummaryOut:
     run = RunService(session).get(run_id)
@@ -67,6 +105,27 @@ def get_run(run_id: str, session: Session = Depends(get_session)) -> RunSummaryO
         total_results=len(results),
         unresolved_count=sum(1 for r in results if r.test_case_id is None),
         by_outcome=dict(outcomes),
+        plan_progress=_plan_progress(session, run, results),
+    )
+
+
+def _plan_progress(session: Session, run, results) -> PlanProgress | None:
+    """Coverage of a plan's frozen case list by this run's results. Computed, never stored."""
+    if run.plan_id is None:
+        return None
+    members = PlanService(session).cases(run.plan_id)
+    results_by_case = {r.test_case_id: r for r in results if r.test_case_id is not None}
+
+    covered = [m for m in members if m.test_case_id in results_by_case]
+    missing_ids = [m.test_case_id for m in members if m.test_case_id not in results_by_case]
+    missing_keys = [session.get(TestCase, case_id).case_key for case_id in missing_ids]
+    outcomes = Counter(results_by_case[m.test_case_id].outcome for m in covered)
+
+    return PlanProgress(
+        total_cases=len(members),
+        cases_with_result=len(covered),
+        by_outcome=dict(outcomes),
+        cases_without_result=missing_keys,
     )
 
 

@@ -161,3 +161,94 @@ def test_run_timestamps_are_timezone_aware_across_a_fresh_request(client, setup)
         f"started_at={started_at!r} round-tripped through a fresh session without "
         "timezone info — the UTCDateTime fix has regressed"
     )
+
+
+def make_plan_run(client):
+    client.post("/api/projects", json={"key": "PLN", "name": "Planned"})
+    client.post("/api/projects/PLN/cases", json={"title": "Manual A", "execution_type": "manual"})
+    client.post("/api/projects/PLN/cases", json={"title": "Manual B", "execution_type": "manual"})
+    plan = client.post(
+        "/api/projects/PLN/plans",
+        json={"name": "P", "case_keys": ["PLN-1", "PLN-2"]},
+    ).json()
+    run = client.post(f"/api/plans/{plan['id']}/runs", json={}).json()
+    return plan, run
+
+
+def test_cancel_a_run(client, setup):
+    run_id = open_run(client, "cancel-1").json()["id"]
+
+    response = client.post(f"/api/runs/{run_id}/cancel")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "canceled"
+
+
+def test_ingesting_into_a_canceled_run_reports_run_canceled(client, setup):
+    run_id = open_run(client, "cancel-2").json()["id"]
+    client.post(f"/api/runs/{run_id}/cancel")
+
+    response = client.post(
+        f"/api/runs/{run_id}/results",
+        json={
+            "results": [
+                {
+                    "case_key": "CHK-1",
+                    "test_identifier": "t.py::a",
+                    "outcome": "passed",
+                    "executed_at": EXECUTED_AT,
+                }
+            ]
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "run_canceled", (
+        "a canceled run must not be reported as completed"
+    )
+
+
+def test_manual_execution_records_a_result(client):
+    _, run = make_plan_run(client)
+
+    response = client.post(
+        f"/api/runs/{run['id']}/cases/PLN-1/execute",
+        json={"outcome": "failed", "notes": "coupon field rejects valid codes"},
+        headers={"X-Actor": "alvis"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["outcome"] == "failed"
+    assert body["test_identifier"] == "PLN-1"
+
+
+def test_manual_execution_rejects_a_case_outside_the_plan(client):
+    _, run = make_plan_run(client)
+    client.post("/api/projects/PLN/cases", json={"title": "Outsider"})
+
+    response = client.post(f"/api/runs/{run['id']}/cases/PLN-3/execute", json={"outcome": "passed"})
+
+    assert response.status_code == 404
+    assert response.json()["code"] == "case_not_in_plan"
+
+
+def test_plan_progress_reports_coverage(client):
+    _, run = make_plan_run(client)
+    client.post(f"/api/runs/{run['id']}/cases/PLN-1/execute", json={"outcome": "passed"})
+
+    summary = client.get(f"/api/runs/{run['id']}").json()
+
+    progress = summary["plan_progress"]
+    assert progress["total_cases"] == 2
+    assert progress["cases_with_result"] == 1
+    assert progress["by_outcome"] == {"passed": 1}
+    assert progress["cases_without_result"] == ["PLN-2"]
+
+
+def test_plan_progress_is_absent_for_adhoc_runs(client, setup):
+    run_id = open_run(client, "adhoc-progress").json()["id"]
+
+    summary = client.get(f"/api/runs/{run_id}").json()
+
+    assert summary["plan_progress"] is None

@@ -25,10 +25,24 @@ class RunOut(BaseModel):
     completed_at: datetime | None
 
 
+class PlanProgress(BaseModel):
+    total_cases: int
+    cases_with_result: int
+    by_outcome: dict[str, int]
+    cases_without_result: list[str]
+
+
+class ManualExecute(BaseModel):
+    outcome: Literal["passed", "failed", "skipped", "error", "blocked"]
+    notes: str | None = None
+    duration_ms: int | None = Field(default=None, ge=0)
+
+
 class RunSummaryOut(RunOut):
     total_results: int
     unresolved_count: int
     by_outcome: dict[str, int]
+    plan_progress: PlanProgress | None = None
 
 
 class ResultOut(BaseModel):
