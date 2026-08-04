@@ -99,9 +99,9 @@ def test_explicit_keys_and_filter_are_unioned_and_deduplicated(db_session, proje
 
 
 def test_explicit_keys_keep_their_order_then_filter_matches_follow(db_session, project):
-    make_case(db_session, project, "A", tags=["smoke"])
-    make_case(db_session, project, "B")
-    make_case(db_session, project, "C", tags=["smoke"])
+    case_a = make_case(db_session, project, "A", tags=["smoke"])
+    case_b = make_case(db_session, project, "B")
+    case_c = make_case(db_session, project, "C", tags=["smoke"])
     db_session.commit()
     service = PlanService(db_session)
 
@@ -118,7 +118,7 @@ def test_explicit_keys_keep_their_order_then_filter_matches_follow(db_session, p
     db_session.commit()
 
     members = service.cases(plan.id)
-    assert [m.position for m in members] == [0, 1, 2]
+    assert [m.test_case_id for m in members] == [case_b.id, case_a.id, case_c.id]
 
 
 def test_snapshot_pins_the_case_version_and_survives_later_edits(db_session, project):
