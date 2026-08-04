@@ -21,7 +21,8 @@ def test_unmarked():
 """
 
 
-def test_offline_mode_writes_the_result_payload(pytester, tmp_path):
+def test_offline_mode_writes_the_result_payload(pytester, tmp_path, monkeypatch):
+    monkeypatch.delenv("CI", raising=False)
     pytester.makepyfile(test_suite=SUITE)
     out = tmp_path / "results.json"
 
