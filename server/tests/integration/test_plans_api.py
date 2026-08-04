@@ -98,6 +98,7 @@ def test_execute_a_plan_opens_a_linked_run(client, project_key):
     body = response.json()
     assert body["status"] == "running"
     assert body["name"] == "nightly"
+    assert body["plan_id"] == plan["id"]
 
 
 def test_archived_plan_cannot_be_executed(client, project_key):

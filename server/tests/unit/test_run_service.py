@@ -123,6 +123,34 @@ def test_assert_writable_rejects_a_canceled_run_with_its_own_code(db_session, pr
     assert excinfo.value.status_code == 409
 
 
+def test_cancel_rejects_an_already_completed_run(db_session, project):
+    service = RunService(db_session)
+    run, _ = service.open(
+        project=project, external_id="term-1", name="a", source="ci", ci_metadata={}, actor="local"
+    )
+    service.complete(run.id)
+    db_session.commit()
+
+    with pytest.raises(AppError) as excinfo:
+        service.cancel(run.id)
+
+    assert excinfo.value.code == "run_already_completed"
+
+
+def test_complete_rejects_an_already_canceled_run(db_session, project):
+    service = RunService(db_session)
+    run, _ = service.open(
+        project=project, external_id="term-2", name="a", source="ci", ci_metadata={}, actor="local"
+    )
+    service.cancel(run.id)
+    db_session.commit()
+
+    with pytest.raises(AppError) as excinfo:
+        service.complete(run.id)
+
+    assert excinfo.value.code == "run_canceled"
+
+
 def test_open_for_plan_links_the_run_to_the_plan(db_session, project):
     from testforge.services.case_service import CaseService
     from testforge.services.plan_service import PlanService

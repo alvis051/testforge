@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from testforge.api.deps import get_actor, get_session
@@ -109,7 +109,6 @@ def archive_plan(
 def execute_plan(
     plan_id: str,
     payload: PlanRunCreate,
-    response: Response,
     session: Session = Depends(get_session),
     actor: str = Depends(get_actor),
 ) -> RunOut:

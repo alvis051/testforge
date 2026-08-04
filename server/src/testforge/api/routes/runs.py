@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from testforge.api.deps import get_actor, get_session
 from testforge.db.base import utcnow
 from testforge.models.case import TestCase
+from testforge.models.run import Result
 from testforge.schemas.results import IngestSummary, ResultBatch
 from testforge.schemas.runs import (
     AutomationLinkOut,
@@ -114,7 +115,13 @@ def _plan_progress(session: Session, run, results) -> PlanProgress | None:
     if run.plan_id is None:
         return None
     members = PlanService(session).cases(run.plan_id)
-    results_by_case = {r.test_case_id: r for r in results if r.test_case_id is not None}
+    results_by_case: dict[str, Result] = {}
+    for result in results:
+        if result.test_case_id is None:
+            continue
+        current = results_by_case.get(result.test_case_id)
+        if current is None or result.executed_at > current.executed_at:
+            results_by_case[result.test_case_id] = result
 
     covered = [m for m in members if m.test_case_id in results_by_case]
     missing_ids = [m.test_case_id for m in members if m.test_case_id not in results_by_case]

@@ -16,6 +16,7 @@ class RunOut(BaseModel):
 
     id: str
     project_id: str
+    plan_id: str | None
     external_id: str
     name: str | None
     source: str

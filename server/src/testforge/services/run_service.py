@@ -48,6 +48,7 @@ class RunService:
 
     def complete(self, run_id: str) -> Run:
         run = self.get(run_id)
+        self.assert_writable(run)
         run.status = "completed"
         run.completed_at = utcnow()
         self.session.flush()
@@ -78,6 +79,7 @@ class RunService:
 
     def cancel(self, run_id: str) -> Run:
         run = self.get(run_id)
+        self.assert_writable(run)
         run.status = "canceled"
         run.completed_at = utcnow()
         self.session.flush()

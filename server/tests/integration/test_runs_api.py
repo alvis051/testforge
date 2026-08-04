@@ -246,6 +246,64 @@ def test_plan_progress_reports_coverage(client):
     assert progress["cases_without_result"] == ["PLN-2"]
 
 
+def test_plan_progress_keeps_a_later_manual_failure_over_an_earlier_automated_pass(client):
+    _, run = make_plan_run(client)
+    client.post(
+        f"/api/runs/{run['id']}/cases/PLN-1/execute",
+        json={"outcome": "failed", "notes": "manual is the most recent record"},
+    )
+
+    ingested = client.post(
+        f"/api/runs/{run['id']}/results",
+        json={
+            "results": [
+                {
+                    "case_key": "PLN-1",
+                    "test_identifier": "tests/t.py::a",
+                    "outcome": "passed",
+                    "executed_at": "2020-01-01T00:00:00Z",
+                }
+            ]
+        },
+    )
+    assert ingested.status_code == 200
+
+    summary = client.get(f"/api/runs/{run['id']}").json()
+
+    assert summary["plan_progress"]["by_outcome"] == {"failed": 1}, (
+        "the later manual failure must win over an earlier automated pass"
+    )
+
+
+def test_plan_progress_lets_a_later_automated_result_override_an_earlier_manual_one(client):
+    _, run = make_plan_run(client)
+    client.post(
+        f"/api/runs/{run['id']}/cases/PLN-1/execute",
+        json={"outcome": "failed", "notes": "manual is now the older record"},
+    )
+
+    ingested = client.post(
+        f"/api/runs/{run['id']}/results",
+        json={
+            "results": [
+                {
+                    "case_key": "PLN-1",
+                    "test_identifier": "tests/t.py::a",
+                    "outcome": "passed",
+                    "executed_at": "2030-01-01T00:00:00Z",
+                }
+            ]
+        },
+    )
+    assert ingested.status_code == 200
+
+    summary = client.get(f"/api/runs/{run['id']}").json()
+
+    assert summary["plan_progress"]["by_outcome"] == {"passed": 1}, (
+        "the later automated result must win over an earlier manual record"
+    )
+
+
 def test_plan_progress_is_absent_for_adhoc_runs(client, setup):
     run_id = open_run(client, "adhoc-progress").json()["id"]
 
