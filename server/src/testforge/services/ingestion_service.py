@@ -3,12 +3,12 @@ from collections import Counter
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from testforge.errors import AppError
 from testforge.models.case import TestCaseVersion
 from testforge.models.run import Result, Run
 from testforge.schemas.results import IngestSummary, ResultIn
 from testforge.services.automation_service import AutomationService
 from testforge.services.case_service import CaseService
+from testforge.services.run_service import RunService
 
 
 class IngestionService:
@@ -20,13 +20,7 @@ class IngestionService:
         self.automation = AutomationService(session)
 
     def ingest(self, *, run: Run, results: list[ResultIn]) -> IngestSummary:
-        if run.status != "running":
-            raise AppError(
-                "run_already_completed",
-                f"run {run.id} is {run.status} and no longer accepts results",
-                409,
-                {"run_id": run.id, "status": run.status},
-            )
+        RunService(self.session).assert_writable(run)
 
         resolved = unresolved = archived = 0
         outcomes: Counter[str] = Counter()
