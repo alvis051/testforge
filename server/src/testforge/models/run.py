@@ -21,7 +21,9 @@ class Run(Base, TimestampMixin):
     name: Mapped[str | None] = mapped_column(String(300), nullable=True)
     source: Mapped[str] = mapped_column(String(20), nullable=False, default="local")
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="running")
-    plan_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    plan_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("test_plans.id"), nullable=True, index=True
+    )
     ci_metadata_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     created_by: Mapped[str] = mapped_column(String(200), nullable=False, default="local")
     started_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
