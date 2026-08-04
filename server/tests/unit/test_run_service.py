@@ -197,9 +197,7 @@ def test_open_for_plan_rejects_an_archived_plan(db_session, project):
     db_session.commit()
 
     with pytest.raises(AppError) as excinfo:
-        RunService(db_session).open_for_plan(
-            plan=plan, name=None, external_id=None, actor="local"
-        )
+        RunService(db_session).open_for_plan(plan=plan, name=None, external_id=None, actor="local")
 
     assert excinfo.value.code == "plan_archived"
     assert excinfo.value.status_code == 409
