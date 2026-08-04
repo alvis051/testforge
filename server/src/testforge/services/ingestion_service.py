@@ -56,6 +56,7 @@ class IngestionService:
                     test_case_version_id=version_id,
                     automation_link_id=link_id,
                     test_identifier=incoming.test_identifier,
+                    framework=incoming.framework,
                     unresolved_case_key=incoming.case_key if case is None else None,
                     outcome=incoming.outcome,
                     duration_ms=incoming.duration_ms,

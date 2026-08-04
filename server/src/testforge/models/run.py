@@ -47,6 +47,7 @@ class Result(Base):
         String(36), ForeignKey("automation_links.id"), nullable=True
     )
     test_identifier: Mapped[str] = mapped_column(String(1000), nullable=False)
+    framework: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
     unresolved_case_key: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     outcome: Mapped[str] = mapped_column(String(20), nullable=False)
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
