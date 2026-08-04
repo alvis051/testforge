@@ -978,6 +978,8 @@ git commit -m "feat: add plan execution, run cancellation, and a shared terminal
 
 **Prerequisite this task must handle first:** the `Result` model has **no `framework` column** today. Slice 1's `ResultIn` schema carries `framework`, but `IngestionService` uses it only to key the automation link and then discards it — it is never persisted on the result row. The spec's manual-result mapping (§4) requires `framework="manual"` to distinguish manual rows from automated ones without adding a bespoke column, so Step 3 adds the column and backfills ingestion to persist it too. Do Step 3 before writing the service.
 
+**Post-implementation note (2026-08-04):** the `Result(...)` construction in Step 4's code block below originally omitted `framework="manual"`, despite this being the entire point of the prerequisite above and despite the `existing` replace-lookup already filtering on it. Caught and fixed during implementation (commit `9584f61`) — without it, every inserted manual result would have `framework=None`, so the replace-not-append lookup would never match a prior row, silently breaking design point 2. The code block below has been corrected to match.
+
 - [ ] **Step 1: Write the failing tests**
 
 Create `server/tests/unit/test_manual_service.py`:
@@ -1281,6 +1283,7 @@ class ManualExecutionService:
             test_case_id=case.id,
             test_case_version_id=self._current_version_id(case),
             automation_link_id=None,
+            framework="manual",
             test_identifier=case.case_key,
             unresolved_case_key=None,
             outcome=outcome,
@@ -1307,12 +1310,12 @@ class ManualExecutionService:
 - [ ] **Step 5: Run the tests to verify they pass**
 
 Run: `uv run pytest server/tests/unit/test_manual_service.py -v`
-Expected: PASS — 8 passed
+Expected: PASS — 7 passed
 
 - [ ] **Step 6: Run the full suite**
 
 Run: `uv run pytest -v`
-Expected: 114 passed, including the schema-parity test with the new column.
+Expected: 113 passed, including the schema-parity test with the new column.
 
 - [ ] **Step 7: Commit**
 
@@ -1663,7 +1666,7 @@ Expected: PASS — 8 passed
 - [ ] **Step 7: Run the full suite**
 
 Run: `uv run pytest -v`
-Expected: 122 passed.
+Expected: 121 passed.
 
 - [ ] **Step 8: Commit**
 
@@ -1911,7 +1914,7 @@ Expected: PASS — all existing run tests plus the 6 new ones.
 - [ ] **Step 6: Run the full suite**
 
 Run: `uv run pytest -v`
-Expected: 128 passed.
+Expected: 127 passed.
 
 - [ ] **Step 7: Commit**
 
@@ -2123,7 +2126,7 @@ Expected: PASS — the existing CLI tests plus the 2 new ones.
 - [ ] **Step 7: Run everything**
 
 Run: `uv run ruff format . && uv run ruff check . && uv run pytest -v`
-Expected: ruff clean; 131 passed.
+Expected: ruff clean; 130 passed.
 
 - [ ] **Step 8: Update the README**
 
