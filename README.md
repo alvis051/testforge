@@ -59,6 +59,29 @@ Importing an existing suite that has no markers yet is a useful first step: ever
 uv run tf run import-junit CHK ./junit.xml ci-1234
 ```
 
+## Test plans
+
+Group cases into a plan, then execute it:
+
+```bash
+uv run tf plan create CHK "Release 2.4" --milestone 2.4 --tag release
+uv run tf plan show <plan_id>
+```
+
+A plan freezes its case list at creation — adding a matching case later does not join an
+existing plan, so two runs of the same plan stay comparable. Executing a plan opens a run
+scoped to those cases; results arrive either from automation (the same ingestion path) or
+from manual execution:
+
+```bash
+curl -X POST localhost:8000/api/runs/<run_id>/cases/CHK-1/execute \
+  -H 'Content-Type: application/json' \
+  -d '{"outcome": "failed", "notes": "coupon field rejects valid codes"}'
+```
+
+`GET /api/runs/<run_id>` then reports plan coverage — how many of the plan's cases have
+results, broken down by outcome, and which are still outstanding.
+
 ## Design
 
 - Specs: `docs/superpowers/specs/`

@@ -52,3 +52,30 @@ def test_run_show_reports_counts(cli, client):
 
     assert result.exit_code == 0
     assert "passed" in result.output
+
+
+def test_plan_create_and_list(cli, client):
+    cli.invoke(app, ["project", "create", "CHK", "Checkout"])
+    cli.invoke(app, ["case", "new", "CHK", "Coupon applies"])
+
+    created = cli.invoke(app, ["plan", "create", "CHK", "Release 2.4", "--case-key", "CHK-1"])
+    assert created.exit_code == 0, created.output
+    assert "Release 2.4" in created.output
+
+    listed = cli.invoke(app, ["plan", "list", "CHK"])
+    assert listed.exit_code == 0
+    assert "Release 2.4" in listed.output
+
+
+def test_plan_show_reports_the_case_snapshot(cli, client):
+    cli.invoke(app, ["project", "create", "CHK", "Checkout"])
+    cli.invoke(app, ["case", "new", "CHK", "Coupon applies"])
+    plan_id = client.post(
+        "/api/projects/CHK/plans", json={"name": "P", "case_keys": ["CHK-1"]}
+    ).json()["id"]
+
+    result = cli.invoke(app, ["plan", "show", plan_id])
+
+    assert result.exit_code == 0
+    assert "CHK-1" in result.output
+    assert "Coupon applies" in result.output

@@ -12,9 +12,11 @@ app = typer.Typer(help="TestForge CLI")
 project_app = typer.Typer(help="Manage projects")
 case_app = typer.Typer(help="Manage test cases")
 run_app = typer.Typer(help="Inspect and import runs")
+plan_app = typer.Typer(help="Manage test plans")
 app.add_typer(project_app, name="project")
 app.add_typer(case_app, name="case")
 app.add_typer(run_app, name="run")
+app.add_typer(plan_app, name="plan")
 
 
 @project_app.command("create")
@@ -104,6 +106,44 @@ def run_upload(payload_path: Path) -> None:
     summary = api.post(f"/api/runs/{run['id']}/results", json={"results": payload["results"]})
     api.post(f"/api/runs/{run['id']}/complete")
     typer.echo(json.dumps(summary, indent=2))
+
+
+@plan_app.command("create")
+def plan_create(
+    project_key: str,
+    name: str,
+    milestone: str | None = None,
+    environment: str | None = None,
+    case_key: list[str] = typer.Option([], "--case-key", help="Include this case (repeatable)"),
+    tag: str | None = typer.Option(None, "--tag", help="Include every case with this tag"),
+) -> None:
+    payload: dict = {"name": name, "case_keys": list(case_key)}
+    if milestone is not None:
+        payload["milestone"] = milestone
+    if environment is not None:
+        payload["environment"] = environment
+    if tag is not None:
+        payload["filter"] = {"tag": tag}
+    plan = ApiClient().post(f"/api/projects/{project_key}/plans", json=payload)
+    typer.echo(f"{plan['id']}  {plan['name']}  ({plan['case_count']} cases)")
+
+
+@plan_app.command("list")
+def plan_list(project_key: str, milestone: str | None = None) -> None:
+    params = {"milestone": milestone} if milestone is not None else {}
+    for plan in ApiClient().get(f"/api/projects/{project_key}/plans", params=params):
+        typer.echo(
+            f"{plan['id']}  {plan['status']:<9} {plan['case_count']:>3} cases  {plan['name']}"
+        )
+
+
+@plan_app.command("show")
+def plan_show(plan_id: str) -> None:
+    api = ApiClient()
+    plan = api.get(f"/api/plans/{plan_id}")
+    typer.echo(f"{plan['name']}  status={plan['status']}  cases={plan['case_count']}")
+    for case in api.get(f"/api/plans/{plan_id}/cases"):
+        typer.echo(f"  {case['case_key']:<12} {case['execution_type']:<10} {case['title']}")
 
 
 @app.command("seed")
