@@ -1,6 +1,5 @@
 import pytest
 from sqlalchemy import select
-
 from testforge.errors import AppError
 from testforge.models.run import Result
 from testforge.services.case_service import CaseService
