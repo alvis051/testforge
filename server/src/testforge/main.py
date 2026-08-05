@@ -37,8 +37,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             """
             if full_path.startswith("api/"):
                 raise AppError("not_found", f"no such path: /{full_path}", 404)
-            candidate = dist / full_path
-            if full_path and candidate.is_file():
+            candidate = (dist / full_path).resolve()
+            if full_path and candidate.is_file() and candidate.is_relative_to(dist.resolve()):
                 return FileResponse(candidate)
             return FileResponse(dist / "index.html")
 

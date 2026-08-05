@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 
 class AppError(Exception):
@@ -68,6 +69,22 @@ def register_error_handlers(app: FastAPI) -> None:
                 "message": "request payload failed validation",
                 "details": {"errors": jsonable(error.errors())},
             },
+        )
+
+    @app.exception_handler(StarletteHTTPException)
+    def handle_http_exception(_: Request, error: StarletteHTTPException) -> JSONResponse:
+        """Catch-all for Starlette/FastAPI-raised HTTPExceptions we didn't build ourselves.
+
+        The most common case is a request under the ``/assets`` ``StaticFiles`` mount for a
+        file that no longer exists (e.g. a stale browser tab referencing a hashed asset from
+        a previous deploy) -- Starlette's default body for that is a bare
+        ``{"detail": "Not Found"}``, not this project's error contract, so it must be
+        remapped here.
+        """
+        code = "not_found" if error.status_code == 404 else "http_error"
+        return JSONResponse(
+            status_code=error.status_code,
+            content={"code": code, "message": str(error.detail), "details": {}},
         )
 
 
