@@ -1,4 +1,4 @@
-.PHONY: install dev test lint fmt migrate seed demo types ui build-ui e2e
+.PHONY: install dev test lint fmt migrate seed demo types ui build-ui e2e serve
 
 install:
 	uv sync
@@ -21,8 +21,8 @@ migrate:
 seed: migrate
 	uv run tf seed
 
-demo: seed
-	@echo "Start the API with 'make dev', then: uv run tf case list CHK"
+demo: seed build-ui
+	@echo "Now run 'make serve' and open http://localhost:8000"
 
 types:
 	uv run tf openapi > openapi.json
@@ -36,3 +36,6 @@ build-ui:
 
 e2e:
 	cd frontend && npm run test:e2e
+
+serve: build-ui migrate
+	TESTFORGE_FRONTEND_DIST=frontend/dist uv run uvicorn testforge.main:create_app --factory --port 8000

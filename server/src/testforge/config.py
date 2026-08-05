@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="TESTFORGE_", env_file=".env")
 
     database_url: str = "sqlite:///./testforge.db"
+    frontend_dist: str | None = None
 
 
 @lru_cache
