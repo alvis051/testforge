@@ -1,4 +1,4 @@
-import { Link, Navigate, Route, Routes, useNavigate, useParams } from "react-router-dom";
+import { Link, Navigate, Outlet, Route, Routes, useNavigate, useParams } from "react-router-dom";
 
 import { useProjects } from "./api/queries";
 import { ErrorState } from "./components/ErrorState";
@@ -6,7 +6,7 @@ import { PlansPage } from "./pages/PlansPage";
 import { RunDetailPage } from "./pages/RunDetailPage";
 import { RunsPage } from "./pages/RunsPage";
 
-function Shell({ children }: { children: React.ReactNode }) {
+function Shell() {
   const { data: projects } = useProjects();
   const { projectKey } = useParams<{ projectKey: string }>();
   const navigate = useNavigate();
@@ -36,7 +36,9 @@ function Shell({ children }: { children: React.ReactNode }) {
           </select>
         )}
       </header>
-      <main className="shell-main">{children}</main>
+      <main className="shell-main">
+        <Outlet />
+      </main>
     </>
   );
 }
@@ -51,13 +53,13 @@ function Landing() {
 
 export function App() {
   return (
-    <Shell>
-      <Routes>
+    <Routes>
+      <Route element={<Shell />}>
         <Route path="/" element={<Landing />} />
         <Route path="/projects/:projectKey/runs" element={<RunsPage />} />
         <Route path="/projects/:projectKey/plans" element={<PlansPage />} />
         <Route path="/runs/:runId" element={<RunDetailPage />} />
-      </Routes>
-    </Shell>
+      </Route>
+    </Routes>
   );
 }

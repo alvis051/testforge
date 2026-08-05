@@ -29,10 +29,16 @@ export async function apiFetch<T>(path: string): Promise<T> {
     throw new ApiError(
       response.status,
       parsed?.code ?? "unknown_error",
-      parsed?.message ?? response.statusText,
+      parsed?.message || response.statusText || `HTTP ${response.status}`,
       parsed?.details ?? {},
     );
   }
 
-  return (await response.json()) as T;
+  let data: unknown;
+  try {
+    data = await response.json();
+  } catch {
+    throw new ApiError(response.status, "invalid_response", "Response was not valid JSON", {});
+  }
+  return data as T;
 }
