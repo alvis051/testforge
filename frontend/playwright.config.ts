@@ -9,6 +9,7 @@ const DB = "e2e.db";
  */
 export default defineConfig({
   testDir: "./tests/e2e",
+  reporter: [["list"], ["html", { open: "never" }]],
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
   use: { baseURL: `http://127.0.0.1:${PORT}`, trace: "on-first-retry" },

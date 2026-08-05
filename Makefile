@@ -34,7 +34,7 @@ ui:
 build-ui:
 	cd frontend && npm ci && npm run build
 
-e2e:
+e2e: build-ui
 	cd frontend && npm run test:e2e
 
 serve: build-ui migrate

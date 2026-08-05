@@ -28,5 +28,5 @@ test("the plans page lists the seeded plan", async ({ page }) => {
   const rows = page.getByTestId("plan-row");
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toContainText("Release 1.0 regression");
-  await expect(rows.first()).toContainText("1.0");
+  await expect(rows.first().locator("td").nth(1)).toHaveText("1.0");
 });
