@@ -6,6 +6,7 @@ import typer
 from testforge.cli.client import ApiClient
 from testforge.config import get_settings
 from testforge.db.session import create_session_factory
+from testforge.main import create_app
 from testforge.seed import seed_demo
 
 app = typer.Typer(help="TestForge CLI")
@@ -144,6 +145,12 @@ def plan_show(plan_id: str) -> None:
     typer.echo(f"{plan['name']}  status={plan['status']}  cases={plan['case_count']}")
     for case in api.get(f"/api/plans/{plan_id}/cases"):
         typer.echo(f"  {case['case_key']:<12} {case['execution_type']:<10} {case['title']}")
+
+
+@app.command("openapi")
+def openapi() -> None:
+    """Print the OpenAPI schema. Feeds the frontend's TypeScript type generation."""
+    typer.echo(json.dumps(create_app().openapi(), indent=2, sort_keys=True))
 
 
 @app.command("seed")

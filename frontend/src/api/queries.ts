@@ -1,0 +1,77 @@
+import { useQuery } from "@tanstack/react-query";
+
+import { apiFetch } from "./client";
+import type { Plan, Project, ResultRow, RunListItem, RunSummary } from "./types";
+
+export type RunFilters = { status?: string; source?: string };
+
+/**
+ * Hierarchical query keys. TanStack Query invalidates by key prefix, so
+ * invalidating ['runs', id] catches the run and its results — which is what
+ * keeps the eventual write slice from having to normalise every call site.
+ */
+export const keys = {
+  projects: () => ["projects"] as const,
+  runs: (projectKey: string, filters: RunFilters = {}) =>
+    ["projects", projectKey, "runs", filters] as const,
+  plans: (projectKey: string) => ["projects", projectKey, "plans"] as const,
+  run: (runId: string) => ["runs", runId] as const,
+  runResults: (runId: string) => ["runs", runId, "results"] as const,
+  planRuns: (planId: string) => ["plans", planId, "runs"] as const,
+};
+
+function withParams(path: string, params: Record<string, string | undefined>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value) search.set(key, value);
+  }
+  const query = search.toString();
+  return query ? `${path}?${query}` : path;
+}
+
+export function useProjects() {
+  return useQuery({
+    queryKey: keys.projects(),
+    queryFn: () => apiFetch<Project[]>("/api/projects"),
+  });
+}
+
+export function useRuns(projectKey: string, filters: RunFilters = {}) {
+  return useQuery({
+    queryKey: keys.runs(projectKey, filters),
+    queryFn: () =>
+      apiFetch<RunListItem[]>(
+        withParams(`/api/projects/${projectKey}/runs`, filters),
+      ),
+    enabled: Boolean(projectKey),
+  });
+}
+
+export function usePlans(projectKey: string) {
+  return useQuery({
+    queryKey: keys.plans(projectKey),
+    queryFn: () => apiFetch<Plan[]>(`/api/projects/${projectKey}/plans`),
+    enabled: Boolean(projectKey),
+  });
+}
+
+export function useRun(runId: string) {
+  return useQuery({
+    queryKey: keys.run(runId),
+    queryFn: () => apiFetch<RunSummary>(`/api/runs/${runId}`),
+  });
+}
+
+export function useRunResults(runId: string) {
+  return useQuery({
+    queryKey: keys.runResults(runId),
+    queryFn: () => apiFetch<ResultRow[]>(`/api/runs/${runId}/results`),
+  });
+}
+
+export function usePlanRuns(planId: string) {
+  return useQuery({
+    queryKey: keys.planRuns(planId),
+    queryFn: () => apiFetch<RunListItem[]>(`/api/plans/${planId}/runs`),
+  });
+}
