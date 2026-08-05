@@ -70,3 +70,8 @@ class AutomationLinkOut(BaseModel):
     first_seen_at: datetime
     last_seen_at: datetime
     active: bool
+
+
+class RunListItemOut(RunOut):
+    total_results: int
+    by_outcome: dict[str, int]

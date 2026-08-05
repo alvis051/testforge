@@ -1,13 +1,13 @@
 from collections import Counter
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from testforge.api.deps import get_actor, get_session
 from testforge.db.base import utcnow
 from testforge.models.case import TestCase
-from testforge.models.run import Result
+from testforge.models.run import Result, Run
 from testforge.schemas.results import IngestSummary, ResultBatch
 from testforge.schemas.runs import (
     AutomationLinkOut,
@@ -15,6 +15,7 @@ from testforge.schemas.runs import (
     PlanProgress,
     ResultOut,
     RunCreate,
+    RunListItemOut,
     RunOut,
     RunSummaryOut,
 )
@@ -49,6 +50,37 @@ def open_run(
     )
     response.status_code = 201 if created else 200
     return RunOut.model_validate(run)
+
+
+def build_run_list_items(service: RunService, runs: list[Run]) -> list[RunListItemOut]:
+    """Attach outcome tallies to run rows. Imported by plans.py so the two
+    listing endpoints cannot drift apart."""
+    counts = service.outcome_counts([run.id for run in runs])
+    return [
+        RunListItemOut(
+            **RunOut.model_validate(run).model_dump(),
+            total_results=sum(counts.get(run.id, {}).values()),
+            by_outcome=counts.get(run.id, {}),
+        )
+        for run in runs
+    ]
+
+
+@router.get("/api/projects/{project_key}/runs", response_model=list[RunListItemOut])
+def list_project_runs(
+    project_key: str,
+    status: str | None = None,
+    source: str | None = None,
+    plan_id: str | None = None,
+    limit: int = Query(default=50, ge=1, le=200),
+    session: Session = Depends(get_session),
+) -> list[RunListItemOut]:
+    project = ProjectService(session).get_by_key(project_key)
+    service = RunService(session)
+    runs = service.list_for_project(
+        project, status=status, source=source, plan_id=plan_id, limit=limit
+    )
+    return build_run_list_items(service, runs)
 
 
 @router.post("/api/runs/{run_id}/results", response_model=IngestSummary)

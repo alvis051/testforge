@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from testforge.db.base import utcnow
@@ -6,7 +6,7 @@ from testforge.errors import AppError
 from testforge.ids import new_id
 from testforge.models.plan import TestPlan
 from testforge.models.project import Project
-from testforge.models.run import Run
+from testforge.models.run import Result, Run
 
 
 class RunService:
@@ -84,6 +84,49 @@ class RunService:
         run.completed_at = utcnow()
         self.session.flush()
         return run
+
+    def list_for_project(
+        self,
+        project: Project,
+        *,
+        status: str | None = None,
+        source: str | None = None,
+        plan_id: str | None = None,
+        limit: int = 50,
+    ) -> list[Run]:
+        stmt = select(Run).where(Run.project_id == project.id)
+        if status is not None:
+            stmt = stmt.where(Run.status == status)
+        if source is not None:
+            stmt = stmt.where(Run.source == source)
+        if plan_id is not None:
+            stmt = stmt.where(Run.plan_id == plan_id)
+        stmt = stmt.order_by(Run.started_at.desc()).limit(limit)
+        return list(self.session.scalars(stmt))
+
+    def list_for_plan(self, plan_id: str, *, limit: int = 50) -> list[Run]:
+        stmt = (
+            select(Run).where(Run.plan_id == plan_id).order_by(Run.started_at.desc()).limit(limit)
+        )
+        return list(self.session.scalars(stmt))
+
+    def outcome_counts(self, run_ids: list[str]) -> dict[str, dict[str, int]]:
+        """Outcome tallies for many runs in one GROUP BY.
+
+        The single-run path (``get_run``) counts in Python, which is fine for one run
+        but would be N queries' worth of rows here.
+        """
+        if not run_ids:
+            return {}
+        rows = self.session.execute(
+            select(Result.run_id, Result.outcome, func.count())
+            .where(Result.run_id.in_(run_ids))
+            .group_by(Result.run_id, Result.outcome)
+        )
+        counts: dict[str, dict[str, int]] = {}
+        for run_id, outcome, count in rows:
+            counts.setdefault(run_id, {})[outcome] = count
+        return counts
 
     def assert_writable(self, run: Run) -> None:
         """Reject writes to a terminal run, naming which terminal state it is."""

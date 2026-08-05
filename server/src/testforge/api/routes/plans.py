@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from testforge.api.deps import get_actor, get_session
+from testforge.api.routes.runs import build_run_list_items
 from testforge.models.case import TestCase
 from testforge.schemas.plans import PlanCaseOut, PlanCreate, PlanOut, PlanRunCreate
-from testforge.schemas.runs import RunOut
+from testforge.schemas.runs import RunListItemOut, RunOut
 from testforge.services.plan_service import PlanService
 from testforge.services.project_service import ProjectService
 from testforge.services.run_service import RunService
@@ -117,3 +118,14 @@ def execute_plan(
         plan=plan, name=payload.name, external_id=payload.external_id, actor=actor
     )
     return RunOut.model_validate(run)
+
+
+@router.get("/api/plans/{plan_id}/runs", response_model=list[RunListItemOut])
+def list_plan_runs(
+    plan_id: str,
+    limit: int = Query(default=50, ge=1, le=200),
+    session: Session = Depends(get_session),
+) -> list[RunListItemOut]:
+    PlanService(session).get(plan_id)
+    service = RunService(session)
+    return build_run_list_items(service, service.list_for_plan(plan_id, limit=limit))
