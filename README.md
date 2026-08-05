@@ -82,6 +82,38 @@ curl -X POST localhost:8000/api/runs/<run_id>/cases/CHK-1/execute \
 `GET /api/runs/<run_id>` then reports plan coverage — how many of the plan's cases have
 results, broken down by outcome, and which are still outstanding.
 
+## Dashboard
+
+A read-only React dashboard for inspecting runs.
+
+```bash
+make demo     # migrate, seed a demo run, build the UI
+make serve    # then open http://localhost:8000
+```
+
+For frontend development, run the API and the Vite dev server separately — Vite proxies
+`/api` through, so the two hot-reload independently:
+
+```bash
+make dev      # API on :8000
+make ui       # dashboard on :5173
+```
+
+The dashboard is built around one question: *a run finished — what happened?* Failures sort
+above passes, a result expands in place to show its message and stack trace, plan coverage
+reports which cases have no result yet, and results whose case key matched nothing are called
+out separately rather than buried.
+
+TypeScript types are **generated** from the backend's own OpenAPI schema, so a UI/API schema
+mismatch is a compile error rather than a runtime surprise:
+
+```bash
+make types    # regenerate frontend/src/api/schema.d.ts
+```
+
+CI regenerates them and fails if the committed copy is stale. The dashboard's own tests are
+Playwright specs driving a real browser against a real server and database.
+
 ## Design
 
 - Specs: `docs/superpowers/specs/`
