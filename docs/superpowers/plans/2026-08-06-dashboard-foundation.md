@@ -1503,7 +1503,6 @@ export function ResultsTable({ results }: { results: ResultRow[] }) {
 
 `Fragment` (rather than the `<>` shorthand) is required here: a fragment produced inside `map`
 needs a `key`, and the shorthand syntax cannot take one.
-```
 
 - [ ] **Step 3: Write the run detail page**
 
