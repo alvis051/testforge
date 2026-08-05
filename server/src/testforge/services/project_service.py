@@ -20,6 +20,19 @@ class ProjectService:
         self.session.flush()
         return project
 
+    def get(self, project_id: str) -> Project:
+        """Lookup by id, for rows (runs, plans) that reference a project by id but need
+        its human-facing key in the response."""
+        project = self.session.get(Project, project_id)
+        if project is None:
+            raise AppError(
+                "project_not_found",
+                f"no project {project_id}",
+                404,
+                {"project_id": project_id},
+            )
+        return project
+
     def get_by_key(self, key: str) -> Project:
         project = self.session.scalar(select(Project).where(Project.key == key))
         if project is None:

@@ -2,6 +2,7 @@ from collections import Counter
 
 from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from testforge.api.deps import get_actor, get_session
@@ -30,6 +31,61 @@ from testforge.services.run_service import RunService
 
 router = APIRouter(tags=["runs"])
 
+_RUN_FIELDS = (
+    "id",
+    "project_id",
+    "plan_id",
+    "external_id",
+    "name",
+    "source",
+    "status",
+    "created_by",
+    "started_at",
+    "completed_at",
+)
+
+_RESULT_FIELDS = (
+    "id",
+    "test_case_id",
+    "test_case_version_id",
+    "test_identifier",
+    "framework",
+    "unresolved_case_key",
+    "outcome",
+    "duration_ms",
+    "failure_type",
+    "failure_message",
+    "stack_trace",
+    "executed_at",
+)
+
+
+def run_out(run: Run, project_key: str) -> RunOut:
+    """A ``Run`` row references its project by id, but the UI routes on the project
+    *key* — so the key is passed in rather than looked up here, letting listing
+    endpoints reuse the ``Project`` they already fetched."""
+    return RunOut(**{field: getattr(run, field) for field in _RUN_FIELDS}, project_key=project_key)
+
+
+def run_out_for(session: Session, run: Run) -> RunOut:
+    """For endpoints that hold only a ``Run``: one lookup for its project's key."""
+    return run_out(run, ProjectService(session).get(run.project_id).key)
+
+
+def result_out(result: Result, case_key: str | None) -> ResultOut:
+    return ResultOut(
+        **{field: getattr(result, field) for field in _RESULT_FIELDS}, case_key=case_key
+    )
+
+
+def case_keys_for(session: Session, results: list[Result]) -> dict[str, str]:
+    """Case keys for a whole result list in one query — never one query per row."""
+    case_ids = {r.test_case_id for r in results if r.test_case_id is not None}
+    if not case_ids:
+        return {}
+    rows = session.execute(select(TestCase.id, TestCase.case_key).where(TestCase.id.in_(case_ids)))
+    return {case_id: case_key for case_id, case_key in rows}
+
 
 @router.post("/api/projects/{project_key}/runs", response_model=RunOut)
 def open_run(
@@ -49,16 +105,18 @@ def open_run(
         actor=actor,
     )
     response.status_code = 201 if created else 200
-    return RunOut.model_validate(run)
+    return run_out(run, project.key)
 
 
-def build_run_list_items(service: RunService, runs: list[Run]) -> list[RunListItemOut]:
+def build_run_list_items(
+    service: RunService, runs: list[Run], project_key: str
+) -> list[RunListItemOut]:
     """Attach outcome tallies to run rows. Imported by plans.py so the two
     listing endpoints cannot drift apart."""
     counts = service.outcome_counts([run.id for run in runs])
     return [
         RunListItemOut(
-            **RunOut.model_validate(run).model_dump(),
+            **run_out(run, project_key).model_dump(),
             total_results=sum(counts.get(run.id, {}).values()),
             by_outcome=counts.get(run.id, {}),
         )
@@ -80,7 +138,7 @@ def list_project_runs(
     runs = service.list_for_project(
         project, status=status, source=source, plan_id=plan_id, limit=limit
     )
-    return build_run_list_items(service, runs)
+    return build_run_list_items(service, runs, project.key)
 
 
 @router.post("/api/runs/{run_id}/results", response_model=IngestSummary)
@@ -98,14 +156,14 @@ def ingest_results(
 def complete_run(
     run_id: str, session: Session = Depends(get_session), actor: str = Depends(get_actor)
 ) -> RunOut:
-    return RunOut.model_validate(RunService(session).complete(run_id))
+    return run_out_for(session, RunService(session).complete(run_id))
 
 
 @router.post("/api/runs/{run_id}/cancel", response_model=RunOut)
 def cancel_run(
     run_id: str, session: Session = Depends(get_session), actor: str = Depends(get_actor)
 ) -> RunOut:
-    return RunOut.model_validate(RunService(session).cancel(run_id))
+    return run_out_for(session, RunService(session).cancel(run_id))
 
 
 @router.post("/api/runs/{run_id}/cases/{case_key}/execute", response_model=ResultOut)
@@ -125,7 +183,7 @@ def execute_case_manually(
         duration_ms=payload.duration_ms,
         actor=actor,
     )
-    return ResultOut.model_validate(result)
+    return result_out(result, case_key)
 
 
 @router.get("/api/runs/{run_id}", response_model=RunSummaryOut)
@@ -134,7 +192,7 @@ def get_run(run_id: str, session: Session = Depends(get_session)) -> RunSummaryO
     results = IngestionService(session).results_for_run(run)
     outcomes = Counter(result.outcome for result in results)
     return RunSummaryOut(
-        **RunOut.model_validate(run).model_dump(),
+        **run_out_for(session, run).model_dump(),
         total_results=len(results),
         unresolved_count=sum(1 for r in results if r.test_case_id is None),
         by_outcome=dict(outcomes),
@@ -185,7 +243,8 @@ def list_results(
     if case_key is not None:
         case = CaseService(session).get_by_key(case_key)
         results = [r for r in results if r.test_case_id == case.id]
-    return [ResultOut.model_validate(r) for r in results]
+    keys = case_keys_for(session, results)
+    return [result_out(r, keys.get(r.test_case_id)) for r in results]
 
 
 @router.get("/api/cases/{case_key}/automation-links", response_model=list[AutomationLinkOut])

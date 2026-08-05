@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from testforge.api.deps import get_actor, get_session
-from testforge.api.routes.runs import build_run_list_items
+from testforge.api.routes.runs import build_run_list_items, run_out
 from testforge.models.case import TestCase
 from testforge.schemas.plans import PlanCaseOut, PlanCreate, PlanOut, PlanRunCreate
 from testforge.schemas.runs import RunListItemOut, RunOut
@@ -114,10 +114,11 @@ def execute_plan(
     actor: str = Depends(get_actor),
 ) -> RunOut:
     plan = PlanService(session).get(plan_id)
+    project = ProjectService(session).get(plan.project_id)
     run = RunService(session).open_for_plan(
         plan=plan, name=payload.name, external_id=payload.external_id, actor=actor
     )
-    return RunOut.model_validate(run)
+    return run_out(run, project.key)
 
 
 @router.get("/api/plans/{plan_id}/runs", response_model=list[RunListItemOut])
@@ -126,6 +127,7 @@ def list_plan_runs(
     limit: int = Query(default=50, ge=1, le=200),
     session: Session = Depends(get_session),
 ) -> list[RunListItemOut]:
-    PlanService(session).get(plan_id)
+    plan = PlanService(session).get(plan_id)
+    project = ProjectService(session).get(plan.project_id)
     service = RunService(session)
-    return build_run_list_items(service, service.list_for_plan(plan_id, limit=limit))
+    return build_run_list_items(service, service.list_for_plan(plan_id, limit=limit), project.key)

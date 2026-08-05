@@ -16,6 +16,7 @@ class RunOut(BaseModel):
 
     id: str
     project_id: str
+    project_key: str
     plan_id: str | None
     external_id: str
     name: str | None
@@ -51,8 +52,10 @@ class ResultOut(BaseModel):
 
     id: str
     test_case_id: str | None
+    case_key: str | None
     test_case_version_id: str | None
     test_identifier: str
+    framework: str | None
     unresolved_case_key: str | None
     outcome: str
     duration_ms: int | None

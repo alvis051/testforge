@@ -3,9 +3,11 @@
 Test case and test plan management with automation result ingestion — a system of record that
 links the test cases you write to the automated tests that actually run.
 
-Slice 1 (this repo's current state) covers projects, a suite tree, versioned test cases (manual
-and automated), discovered automation links, ad-hoc runs, and result ingestion from pytest and
-JUnit XML.
+The repo currently covers projects, a suite tree, versioned test cases (manual and automated),
+discovered automation links, runs, and result ingestion from pytest and JUnit XML. On top of
+that it adds test plans that freeze a case list, manual execution of a planned case with plan
+coverage reporting, and a read-only web dashboard for browsing runs, plans, and the results of
+a single run.
 
 ## Quickstart
 

@@ -745,6 +745,8 @@ export interface components {
         };
         /** ResultOut */
         ResultOut: {
+            /** Case Key */
+            case_key: string | null;
             /** Duration Ms */
             duration_ms: number | null;
             /**
@@ -756,6 +758,8 @@ export interface components {
             failure_message: string | null;
             /** Failure Type */
             failure_type: string | null;
+            /** Framework */
+            framework: string | null;
             /** Id */
             id: string;
             /** Outcome */
@@ -808,6 +812,8 @@ export interface components {
             plan_id: string | null;
             /** Project Id */
             project_id: string;
+            /** Project Key */
+            project_key: string;
             /** Source */
             source: string;
             /**
@@ -836,6 +842,8 @@ export interface components {
             plan_id: string | null;
             /** Project Id */
             project_id: string;
+            /** Project Key */
+            project_key: string;
             /** Source */
             source: string;
             /**
@@ -867,6 +875,8 @@ export interface components {
             plan_progress?: components["schemas"]["PlanProgress"] | null;
             /** Project Id */
             project_id: string;
+            /** Project Key */
+            project_key: string;
             /** Source */
             source: string;
             /**

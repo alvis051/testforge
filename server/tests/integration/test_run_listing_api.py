@@ -115,6 +115,40 @@ def test_plan_runs_returns_that_plans_run_history(client, project_key):
     assert all(r["plan_id"] == plan["id"] for r in body)
 
 
+def test_listing_returns_newest_runs_first(client, project_key):
+    older = open_run(client, "older-1")
+    newer = open_run(client, "newer-1")
+
+    body = client.get("/api/projects/CHK/runs").json()
+
+    assert [r["external_id"] for r in body] == ["newer-1", "older-1"], (
+        "the design spec promises newest-first; a run listing that reorders between "
+        "requests is worse than useless for spotting the run that just broke"
+    )
+    assert [r["id"] for r in body] == [newer["id"], older["id"]]
+
+
+def test_run_responses_name_their_own_project_not_the_first_one(client, project_key):
+    """A run detail page is reached at /runs/<id>, which carries no project in the URL.
+    Without the key on the run itself the dashboard fell back to the first project and
+    silently navigated people out of the project they were inspecting."""
+    client.post("/api/projects", json={"key": "ZZZ", "name": "Zebra"})
+    foreign = client.post(
+        "/api/projects/ZZZ/runs", json={"external_id": "zzz-1", "source": "ci"}
+    ).json()
+    ours = open_run(client, "ours-1")
+
+    detail = client.get(f"/api/runs/{foreign['id']}").json()
+    listed = client.get("/api/projects/CHK/runs").json()
+
+    assert foreign["project_key"] == "ZZZ"
+    assert detail["project_key"] == "ZZZ", (
+        "the single-run endpoint must report the run's own project, not the first-seeded one"
+    )
+    assert [r["project_key"] for r in listed] == ["CHK"]
+    assert listed[0]["id"] == ours["id"]
+
+
 def test_plan_runs_404s_for_an_unknown_plan(client, project_key):
     response = client.get("/api/plans/does-not-exist/runs")
 

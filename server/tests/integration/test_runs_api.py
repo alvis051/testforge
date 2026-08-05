@@ -310,3 +310,66 @@ def test_plan_progress_is_absent_for_adhoc_runs(client, setup):
     summary = client.get(f"/api/runs/{run_id}").json()
 
     assert summary["plan_progress"] is None
+
+
+def test_results_expose_framework_and_the_resolved_case_key(client):
+    """The results table has to tell a manual correction apart from the automated result
+    it corrects. Both rows point at the same case, so a bare "linked" marker said nothing
+    about which is which."""
+    _, run = make_plan_run(client)
+    automated = client.post(
+        f"/api/runs/{run['id']}/results",
+        json={
+            "results": [
+                {
+                    "case_key": "PLN-1",
+                    "test_identifier": "tests/test_checkout.py::test_coupon",
+                    "framework": "pytest",
+                    "outcome": "passed",
+                    "executed_at": EXECUTED_AT,
+                }
+            ]
+        },
+    )
+    assert automated.status_code == 200
+
+    manual = client.post(
+        f"/api/runs/{run['id']}/cases/PLN-1/execute",
+        json={"outcome": "failed", "notes": "coupon field rejects valid codes"},
+    )
+
+    assert manual.status_code == 200
+    assert manual.json()["framework"] == "manual"
+    assert manual.json()["case_key"] == "PLN-1"
+
+    results = client.get(f"/api/runs/{run['id']}/results").json()
+    by_framework = {r["framework"]: r for r in results}
+
+    assert set(by_framework) == {"manual", "pytest"}, (
+        "both the manual result and the automated one it corrects must be "
+        "distinguishable by framework"
+    )
+    assert by_framework["manual"]["case_key"] == "PLN-1"
+    assert by_framework["pytest"]["case_key"] == "PLN-1"
+
+
+def test_an_unresolved_result_has_no_case_key(client, setup):
+    run_id = open_run(client).json()["id"]
+    client.post(
+        f"/api/runs/{run_id}/results",
+        json={
+            "results": [
+                {
+                    "case_key": "CHK-999",
+                    "test_identifier": "t.py::orphan",
+                    "outcome": "failed",
+                    "executed_at": EXECUTED_AT,
+                }
+            ]
+        },
+    )
+
+    row = client.get(f"/api/runs/{run_id}/results").json()[0]
+
+    assert row["case_key"] is None, "nothing resolved, so there is no case key to report"
+    assert row["unresolved_case_key"] == "CHK-999"

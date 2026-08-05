@@ -20,7 +20,8 @@ export function RunDetailPage() {
       <h2 data-testid="run-name">{run.name ?? run.external_id}</h2>
       <p className="muted">
         {run.status} · {run.source} ·{" "}
-        {new Date(run.started_at).toLocaleString()} · <Link to="/">all runs</Link>
+        {new Date(run.started_at).toLocaleString()} ·{" "}
+        <Link to={`/projects/${run.project_key}/runs`}>all runs</Link>
       </p>
 
       {run.plan_progress && <PlanCoverage progress={run.plan_progress} />}

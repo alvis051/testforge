@@ -63,9 +63,21 @@ export function ResultsTable({ results }: { results: ResultRow[] }) {
               <td>
                 <OutcomeBadge outcome={result.outcome} />
               </td>
-              <td>{result.test_identifier}</td>
+              <td>
+                {result.test_identifier}
+                {result.framework && (
+                  <>
+                    {" "}
+                    <span className="muted" data-testid="result-framework">
+                      {result.framework}
+                    </span>
+                  </>
+                )}
+              </td>
               <td className="muted">
-                {result.unresolved_case_key ?? (result.test_case_id ? "linked" : "—")}
+                {/* A resolved case names itself; an unresolved one can only report the
+                    key nothing matched. */}
+                {result.case_key ?? result.unresolved_case_key ?? "—"}
               </td>
               <td className="muted">
                 {result.duration_ms === null ? "—" : `${result.duration_ms} ms`}

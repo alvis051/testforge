@@ -94,6 +94,8 @@ class RunService:
         plan_id: str | None = None,
         limit: int = 50,
     ) -> list[Run]:
+        """Newest first. ``id`` is a secondary sort key so runs opened inside the same
+        clock tick still come back in a stable, repeatable order."""
         stmt = select(Run).where(Run.project_id == project.id)
         if status is not None:
             stmt = stmt.where(Run.status == status)
@@ -101,12 +103,15 @@ class RunService:
             stmt = stmt.where(Run.source == source)
         if plan_id is not None:
             stmt = stmt.where(Run.plan_id == plan_id)
-        stmt = stmt.order_by(Run.started_at.desc()).limit(limit)
+        stmt = stmt.order_by(Run.started_at.desc(), Run.id.desc()).limit(limit)
         return list(self.session.scalars(stmt))
 
     def list_for_plan(self, plan_id: str, *, limit: int = 50) -> list[Run]:
         stmt = (
-            select(Run).where(Run.plan_id == plan_id).order_by(Run.started_at.desc()).limit(limit)
+            select(Run)
+            .where(Run.plan_id == plan_id)
+            .order_by(Run.started_at.desc(), Run.id.desc())
+            .limit(limit)
         )
         return list(self.session.scalars(stmt))
 
