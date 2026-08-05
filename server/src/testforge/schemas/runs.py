@@ -58,6 +58,7 @@ class ResultOut(BaseModel):
     duration_ms: int | None
     failure_type: str | None
     failure_message: str | None
+    stack_trace: str | None
     executed_at: datetime
 
 

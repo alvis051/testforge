@@ -760,6 +760,8 @@ export interface components {
             id: string;
             /** Outcome */
             outcome: string;
+            /** Stack Trace */
+            stack_trace: string | null;
             /** Test Case Id */
             test_case_id: string | null;
             /** Test Case Version Id */
