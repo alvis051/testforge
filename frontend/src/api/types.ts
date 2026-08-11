@@ -8,3 +8,6 @@ export type ResultRow = components["schemas"]["ResultOut"];
 export type Plan = components["schemas"]["PlanOut"];
 export type PlanCase = components["schemas"]["PlanCaseOut"];
 export type PlanProgress = components["schemas"]["PlanProgress"];
+export type FlakyCase = components["schemas"]["FlakyCaseOut"];
+export type RunTrendPoint = components["schemas"]["RunTrendPointOut"];
+export type FailureCategory = components["schemas"]["FailureCategoryOut"];

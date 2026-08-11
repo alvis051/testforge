@@ -53,3 +53,20 @@ pre {
   border-radius: 6px;
   font-size: 0.8rem;
 }
+
+.panel h3 { margin: 0 0 0.75rem; font-size: 0.95rem; }
+
+.seq { white-space: nowrap; }
+.seq-mark {
+  display: inline-block;
+  width: 1.1rem;
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.3rem;
+  border-radius: 3px;
+  margin-right: 2px;
+  text-decoration: none;
+}
+.seq-pass { background: #dafbe1; color: var(--pass); }
+.seq-fail { background: #ffebe9; color: var(--fail); }

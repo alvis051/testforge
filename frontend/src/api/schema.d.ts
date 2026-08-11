@@ -212,6 +212,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project_key}/insights/failure-categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Failure Categories */
+        get: operations["failure_categories_api_projects__project_key__insights_failure_categories_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_key}/insights/flaky": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Flaky Cases */
+        get: operations["list_flaky_cases_api_projects__project_key__insights_flaky_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project_key}/insights/trends": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Run Trends */
+        get: operations["run_trends_api_projects__project_key__insights_trends_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{project_key}/plans": {
         parameters: {
             query?: never;
@@ -559,6 +610,28 @@ export interface components {
             /** Version No */
             version_no: number;
         };
+        /** FailureCategoryOut */
+        FailureCategoryOut: {
+            /** Category */
+            category: string;
+            /** Count */
+            count: number;
+        };
+        /** FlakyCaseOut */
+        FlakyCaseOut: {
+            /** Case Key */
+            case_key: string;
+            /** Sample Size */
+            sample_size: number;
+            /** Score */
+            score: number;
+            /** Sequence */
+            sequence: string[];
+            /** Title */
+            title: string;
+            /** Transitions */
+            transitions: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -890,6 +963,28 @@ export interface components {
             total_results: number;
             /** Unresolved Count */
             unresolved_count: number;
+        };
+        /** RunTrendPointOut */
+        RunTrendPointOut: {
+            /** External Id */
+            external_id: string;
+            /** Failed */
+            failed: number;
+            /** Name */
+            name: string | null;
+            /** Pass Rate */
+            pass_rate: number | null;
+            /** Passed */
+            passed: number;
+            /** Run Id */
+            run_id: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Total */
+            total: number;
         };
         /** Step */
         Step: {
@@ -1476,6 +1571,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaseOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    failure_categories_api_projects__project_key__insights_failure_categories_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                project_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FailureCategoryOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_flaky_cases_api_projects__project_key__insights_flaky_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FlakyCaseOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_trends_api_projects__project_key__insights_trends_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                project_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunTrendPointOut"][];
                 };
             };
             /** @description Validation Error */

@@ -2,6 +2,7 @@ import { Link, Navigate, Outlet, Route, Routes, useNavigate, useParams } from "r
 
 import { useProjects } from "./api/queries";
 import { ErrorState } from "./components/ErrorState";
+import { InsightsPage } from "./pages/InsightsPage";
 import { PlansPage } from "./pages/PlansPage";
 import { RunDetailPage } from "./pages/RunDetailPage";
 import { RunsPage } from "./pages/RunsPage";
@@ -20,6 +21,7 @@ function Shell() {
           <nav>
             <Link to={`/projects/${active}/runs`}>Runs</Link>
             <Link to={`/projects/${active}/plans`}>Plans</Link>
+            <Link to={`/projects/${active}/insights`}>Insights</Link>
           </nav>
         )}
         {projects && projects.length > 0 && (
@@ -58,6 +60,7 @@ export function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/projects/:projectKey/runs" element={<RunsPage />} />
         <Route path="/projects/:projectKey/plans" element={<PlansPage />} />
+        <Route path="/projects/:projectKey/insights" element={<InsightsPage />} />
         <Route path="/runs/:runId" element={<RunDetailPage />} />
       </Route>
     </Routes>
