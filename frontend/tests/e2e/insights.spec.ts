@@ -23,8 +23,7 @@ test("the flaky test's history is shown, not just a score", async ({ page }) => 
   await page.goto("/projects/CHK/insights");
 
   const history = page.getByTestId("flaky-row").first().locator(".seq-mark");
-  await expect(history).toHaveCount(6);
-  await expect(history.first()).toHaveText("P");
+  await expect(history).toHaveText(["P", "P", "F", "P", "F", "P"]);
 });
 
 test("the trend chart plots the seeded runs", async ({ page }) => {

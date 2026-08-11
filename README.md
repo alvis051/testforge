@@ -127,8 +127,10 @@ make demo && make serve   # then open http://localhost:8000/projects/CHK/insight
 **Flaky tests** are found by counting pass/fail transitions in each case's history. A
 test that broke once and stayed broken transitioned once — that is a regression, and it
 is not listed here. A test that recovered with nobody fixing it transitioned twice or
-more, and that unexplained self-recovery is what flakiness is. Each flagged test shows
-the history that earned the flag, so the score is inspectable rather than a verdict.
+more, and that unexplained self-recovery is what flakiness is. Below five results,
+nothing is flagged regardless of shape — there isn't enough history to call it a
+pattern yet. Each flagged test shows the history that earned the flag, so the score
+is inspectable rather than a verdict.
 
 **Pass rate** is charted across recent runs, counting only executed tests — skips are
 excluded from both sides of the ratio, so skipping tests never flatters the number.
