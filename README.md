@@ -116,6 +116,27 @@ make types    # regenerate frontend/src/api/schema.d.ts
 CI regenerates them and fails if the committed copy is stale. The dashboard's own tests are
 Playwright specs driving a real browser against a real server and database.
 
+## Insights
+
+Beyond a single run, the dashboard answers whether the suite is trustworthy:
+
+```bash
+make demo && make serve   # then open http://localhost:8000/projects/CHK/insights
+```
+
+**Flaky tests** are found by counting pass/fail transitions in each case's history. A
+test that broke once and stayed broken transitioned once — that is a regression, and it
+is not listed here. A test that recovered with nobody fixing it transitioned twice or
+more, and that unexplained self-recovery is what flakiness is. Each flagged test shows
+the history that earned the flag, so the score is inspectable rather than a verdict.
+
+**Pass rate** is charted across recent runs, counting only executed tests — skips are
+excluded from both sides of the ratio, so skipping tests never flatters the number.
+
+**Failure categories** are matched from the exception type and message. A large
+`uncategorized` bucket is useful signal that the rules need extending for your codebase,
+so failures are never forced into a category that does not fit.
+
 ## Design
 
 - Specs: `docs/superpowers/specs/`
