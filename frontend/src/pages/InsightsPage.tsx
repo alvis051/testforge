@@ -1,8 +1,10 @@
 import { useParams } from "react-router-dom";
 
 import { useFailureCategories, useFlakyCases, useRunTrends } from "../api/queries";
+import { CategoryBars } from "../components/CategoryBars";
 import { ErrorState } from "../components/ErrorState";
 import { FlakyTable } from "../components/FlakyTable";
+import { TrendChart } from "../components/TrendChart";
 
 export function InsightsPage() {
   const { projectKey = "" } = useParams<{ projectKey: string }>();
@@ -25,14 +27,14 @@ export function InsightsPage() {
         <h3>Pass rate over recent runs</h3>
         {trends.error && <ErrorState error={trends.error} />}
         {trends.isLoading && <p className="muted">Loading…</p>}
-        {trends.data && <p className="muted">{trends.data.length} runs</p>}
+        {trends.data && <TrendChart points={trends.data} />}
       </section>
 
       <section className="panel">
         <h3>Failure categories</h3>
         {categories.error && <ErrorState error={categories.error} />}
         {categories.isLoading && <p className="muted">Loading…</p>}
-        {categories.data && <p className="muted">{categories.data.length} categories</p>}
+        {categories.data && <CategoryBars categories={categories.data} />}
       </section>
     </>
   );
