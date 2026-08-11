@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from testforge.api.routes import cases, health, plans, projects, runs, suites
+from testforge.api.routes import cases, health, insights, plans, projects, runs, suites
 from testforge.config import Settings, get_settings
 from testforge.db.session import create_session_factory
 from testforge.errors import AppError, register_error_handlers
@@ -22,6 +22,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(cases.router)
     app.include_router(runs.router)
     app.include_router(plans.router)
+    app.include_router(insights.router)
 
     dist = Path(resolved.frontend_dist) if resolved.frontend_dist else None
     if dist is not None and (dist / "index.html").is_file():
