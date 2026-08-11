@@ -1,4 +1,5 @@
 from testforge.seed import seed_demo
+from testforge.services.analytics_service import AnalyticsService
 from testforge.services.case_service import CaseService
 from testforge.services.ingestion_service import IngestionService
 from testforge.services.project_service import ProjectService
@@ -27,19 +28,20 @@ def test_seed_is_idempotent(db_session):
     assert counts["projects"] == 0, "re-seeding must not duplicate the demo project"
 
 
-def test_seed_creates_a_completed_run_with_mixed_results(db_session):
+def test_seed_creates_a_history_of_completed_runs(db_session):
     counts = seed_demo(db_session)
     db_session.commit()
 
     assert counts["plans"] == 1
-    assert counts["runs"] == 1
-    assert counts["results"] >= 5
+    assert counts["runs"] == 6
+    assert counts["results"] == 36
 
     project = ProjectService(db_session).get_by_key("CHK")
     runs = RunService(db_session).list_for_project(project)
-    assert len(runs) == 1
-    assert runs[0].status == "completed"
-    assert runs[0].plan_id is not None
+    assert len(runs) == 6
+    assert all(run.status == "completed" for run in runs)
+    assert all(run.plan_id is not None for run in runs)
+    assert runs[0].started_at > runs[-1].started_at, "list_for_project is newest-first"
 
 
 def test_seeded_run_has_a_failure_a_skip_and_an_unresolved_result(db_session):
@@ -78,3 +80,31 @@ def test_seed_is_still_idempotent_including_the_run(db_session):
         "runs": 0,
         "results": 0,
     }
+
+
+def test_the_seeded_history_distinguishes_a_flaky_case_from_a_broken_one(db_session):
+    seed_demo(db_session)
+    db_session.commit()
+    project = ProjectService(db_session).get_by_key("CHK")
+
+    flaky = AnalyticsService(db_session).flaky_cases(project)
+
+    keys = [case.case_key for case in flaky]
+    assert "CHK-1" in keys, "CHK-1 recovers on its own and must be flagged"
+    assert "CHK-3" not in keys, (
+        "CHK-3 breaks once and stays broken — a regression, and the demo exists "
+        "to show that the dashboard tells the two apart"
+    )
+
+
+def test_the_seeded_history_exercises_several_failure_categories(db_session):
+    seed_demo(db_session)
+    db_session.commit()
+    project = ProjectService(db_session).get_by_key("CHK")
+
+    categories = {c.category for c in AnalyticsService(db_session).failure_categories(project)}
+
+    assert {"assertion", "timeout", "connection"} <= categories
+    assert "uncategorized" in categories, (
+        "one failure deliberately falls through, so the bucket is visible in the demo"
+    )

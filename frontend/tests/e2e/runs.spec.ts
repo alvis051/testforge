@@ -5,11 +5,11 @@ test("the landing page redirects to the seeded project's runs", async ({ page })
   await expect(page).toHaveURL(/\/projects\/CHK\/runs$/);
 });
 
-test("the seeded run appears with its outcome counts", async ({ page }) => {
+test("the seeded runs appear, newest first, with outcome counts", async ({ page }) => {
   await page.goto("/projects/CHK/runs");
 
   const rows = page.getByTestId("run-row");
-  await expect(rows).toHaveCount(1);
+  await expect(rows).toHaveCount(6);
   await expect(rows.first()).toContainText("nightly regression");
   await expect(rows.first().getByTestId("outcome-passed")).toContainText("4");
   await expect(rows.first().getByTestId("outcome-failed")).toContainText("1");
