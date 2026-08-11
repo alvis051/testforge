@@ -1,9 +1,10 @@
 from collections import Counter
+from itertools import groupby
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from testforge.analytics.flakiness import score_outcomes
+from testforge.analytics.flakiness import COUNTED, score_outcomes
 from testforge.analytics.taxonomy import classify_failure
 from testforge.models.case import TestCase
 from testforge.models.project import Project
@@ -22,15 +23,33 @@ class AnalyticsService:
         self.session = session
 
     def flaky_cases(self, project: Project) -> list[FlakyCaseOut]:
+        """Score each case's flakiness from its per-run history.
+
+        A case can be covered by more than one automated test (one-to-many
+        automation_links), so a run can contribute more than one Result row per
+        case; these are reduced to one class per (case, run) before scoring.
+        A case's class for a run is "passed" only if every countable result for
+        that case in that run passed — any countable failure/error makes the
+        run's class "failed" for that case. Rows are ordered by run identity
+        (started_at, id), not Result.executed_at, which is an unreliable
+        tiebreak: batch imports commonly stamp one identical timestamp across
+        every result in a run.
+        """
         rows = self.session.execute(
-            select(Result.test_case_id, Result.outcome)
+            select(Result.test_case_id, Run.id, Result.outcome)
             .join(Run, Result.run_id == Run.id)
-            .where(Run.project_id == project.id, Result.test_case_id.is_not(None))
-            .order_by(Result.test_case_id, Result.executed_at)
+            .where(
+                Run.project_id == project.id,
+                Result.test_case_id.is_not(None),
+                Result.outcome.in_(COUNTED),
+            )
+            .order_by(Result.test_case_id, Run.started_at, Run.id)
         )
         history: dict[str, list[str]] = {}
-        for case_id, outcome in rows:
-            history.setdefault(case_id, []).append(outcome)
+        for (case_id, _run_id), group in groupby(rows, key=lambda row: (row[0], row[1])):
+            outcomes_in_run = [outcome for _, _, outcome in group]
+            run_class = "passed" if all(o == "passed" for o in outcomes_in_run) else "failed"
+            history.setdefault(case_id, []).append(run_class)
 
         scored = {case_id: score_outcomes(o) for case_id, o in history.items()}
         flaky_ids = [case_id for case_id, result in scored.items() if result.is_flaky]

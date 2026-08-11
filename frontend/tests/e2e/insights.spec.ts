@@ -38,6 +38,8 @@ test("failure categories include the deliberately uncategorised one", async ({ p
   await page.goto("/projects/CHK/insights");
 
   const bars = page.getByTestId("category-bars");
+  await expect(bars).toContainText("timeout");
+  await expect(bars).toContainText("connection");
   await expect(bars).toContainText("assertion");
   await expect(bars).toContainText("uncategorized");
 });

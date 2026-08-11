@@ -115,6 +115,53 @@ def test_flaky_cases_are_ranked_by_score(db_session, project):
     assert flaky[0].score > flaky[1].score
 
 
+def test_a_case_covered_by_two_automated_tests_is_stable_when_uniform_per_run(db_session, project):
+    """Bug B: one case, two automation links (two ``test_identifier``s under one
+    ``case_key``). One always passes, the other always fails, across 5 runs.
+    Every run is uniformly "failed" for the case (not every countable result
+    passed), so the case is stable-but-broken — never flapping — and must not
+    be reported as flaky."""
+    make_case(db_session, project, "Dual-covered")
+    db_session.commit()
+    runs = RunService(db_session)
+    for index in range(5):
+        run, _ = runs.open(
+            project=project,
+            external_id=f"run-{index}",
+            name=f"run {index}",
+            source="ci",
+            ci_metadata={},
+            actor="local",
+        )
+        run.started_at = BASE + timedelta(days=index)
+        db_session.flush()
+        IngestionService(db_session).ingest(
+            run=run,
+            results=[
+                ResultIn(
+                    case_key="CHK-1",
+                    test_identifier="tests/t.py::test_a",
+                    framework="pytest",
+                    outcome="passed",
+                    executed_at=BASE + timedelta(days=index),
+                ),
+                ResultIn(
+                    case_key="CHK-1",
+                    test_identifier="tests/t.py::test_b",
+                    framework="pytest",
+                    outcome="failed",
+                    executed_at=BASE + timedelta(days=index),
+                ),
+            ],
+        )
+        runs.complete(run.id)
+        db_session.commit()
+
+    flaky = AnalyticsService(db_session).flaky_cases(project)
+
+    assert flaky == []
+
+
 def test_flaky_cases_never_include_another_projects_history(db_session, project):
     other = ProjectService(db_session).create(
         key="OTH", name="Other", description=None, actor="local"
@@ -126,6 +173,19 @@ def test_flaky_cases_never_include_another_projects_history(db_session, project)
         record(db_session, other, index, {"OTH-1": outcome})
 
     assert AnalyticsService(db_session).flaky_cases(project) == []
+
+
+def test_run_trends_never_include_another_projects_history(db_session, project):
+    other = ProjectService(db_session).create(
+        key="OTH", name="Other", description=None, actor="local"
+    )
+    db_session.commit()
+    make_case(db_session, other, "Foreign case")
+    db_session.commit()
+    for index, outcome in enumerate(["passed", "failed", "passed"]):
+        record(db_session, other, index, {"OTH-1": outcome})
+
+    assert AnalyticsService(db_session).run_trends(project) == []
 
 
 def test_run_trends_are_oldest_first_and_skip_does_not_count(db_session, project):
@@ -178,6 +238,24 @@ def test_failure_categories_are_counted_and_ranked(db_session, project):
     categories = AnalyticsService(db_session).failure_categories(project)
 
     assert [(c.category, c.count) for c in categories] == [("assertion", 2), ("timeout", 1)]
+
+
+def test_failure_categories_never_include_another_projects_history(db_session, project):
+    other = ProjectService(db_session).create(
+        key="OTH", name="Other", description=None, actor="local"
+    )
+    db_session.commit()
+    make_case(db_session, other, "Foreign case")
+    db_session.commit()
+    record(
+        db_session,
+        other,
+        0,
+        {"OTH-1": "failed"},
+        failures={"OTH-1": ("AssertionError", "assert 1 == 2")},
+    )
+
+    assert AnalyticsService(db_session).failure_categories(project) == []
 
 
 def test_a_project_with_no_history_returns_empty_not_an_error(db_session, project):

@@ -1,6 +1,8 @@
+from datetime import UTC, datetime, timedelta
+
 import pytest
 
-EXECUTED_AT = "2026-08-01T10:00:00Z"
+BASE_EXECUTED_AT = datetime(2026, 8, 1, 10, 0, tzinfo=UTC)
 
 
 @pytest.fixture
@@ -11,9 +13,17 @@ def project_key(client):
     return "CHK"
 
 
-def record(client, index, outcomes, failures=None):
+def record(client, index, outcomes, failures=None, project="CHK"):
+    """One run at BASE_EXECUTED_AT+index days, with {case_key: outcome} results.
+
+    Each run gets a distinct timestamp derived from its index, matching
+    ``test_analytics_service.py``'s ``record()`` — results sharing one timestamp
+    (as a single constant would produce) leaves their relative order undefined,
+    which is exactly the ambiguity flakiness scoring must not depend on.
+    """
+    executed_at = (BASE_EXECUTED_AT + timedelta(days=index)).isoformat()
     run = client.post(
-        "/api/projects/CHK/runs",
+        f"/api/projects/{project}/runs",
         json={"external_id": f"run-{index}", "name": f"run {index}", "source": "ci"},
     ).json()
     client.post(
@@ -26,7 +36,7 @@ def record(client, index, outcomes, failures=None):
                     "outcome": outcome,
                     "failure_type": (failures or {}).get(case_key, (None, None))[0],
                     "failure_message": (failures or {}).get(case_key, (None, None))[1],
-                    "executed_at": EXECUTED_AT,
+                    "executed_at": executed_at,
                 }
                 for case_key, outcome in outcomes.items()
             ]
@@ -95,6 +105,27 @@ def test_failure_categories_endpoint_counts_by_category(client, project_key):
     body = client.get("/api/projects/CHK/insights/failure-categories").json()
 
     assert {c["category"] for c in body} == {"assertion", "uncategorized"}
+
+
+def test_insights_endpoints_never_leak_another_projects_data(client, project_key):
+    client.post("/api/projects", json={"key": "OTH", "name": "Other"})
+    client.post("/api/projects/OTH/cases", json={"title": "Foreign case"})
+    for index, outcome in enumerate(["passed", "failed", "passed", "failed", "passed"]):
+        record(
+            client,
+            index,
+            {"OTH-1": outcome},
+            failures={"OTH-1": ("AssertionError", "assert 1 == 2")},
+            project="OTH",
+        )
+
+    flaky = client.get("/api/projects/CHK/insights/flaky").json()
+    trends = client.get("/api/projects/CHK/insights/trends").json()
+    categories = client.get("/api/projects/CHK/insights/failure-categories").json()
+
+    assert flaky == []
+    assert trends == []
+    assert categories == []
 
 
 def test_insights_endpoints_are_empty_not_an_error_for_a_fresh_project(client, project_key):
