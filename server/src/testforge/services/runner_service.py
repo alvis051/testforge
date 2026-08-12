@@ -9,6 +9,8 @@ from testforge.models.case import TestCase
 from testforge.models.plan import TestPlan
 from testforge.models.run import Run
 from testforge.models.run_job import RunJob
+from testforge.schemas.results import ResultIn
+from testforge.services.ingestion_service import IngestionService
 from testforge.services.plan_service import PlanService
 from testforge.services.project_service import ProjectService
 from testforge.services.run_service import RunService
@@ -135,6 +137,68 @@ class RunnerService:
                 run.status = "queued"
         self.session.flush()
         return len(stale)
+
+    def heartbeat(self, job_id: str, worker_name: str) -> RunJob:
+        job = self._claimed_job(job_id, worker_name)
+        job.lease_expires_at = utcnow() + timedelta(seconds=LEASE_SECONDS)
+        self.session.flush()
+        return job
+
+    def finish(
+        self,
+        *,
+        job_id: str,
+        worker_name: str,
+        status: str,
+        exit_code: int | None,
+        output_tail: str | None,
+        error: str | None,
+        resolved_sha: str | None,
+        results: list[ResultIn],
+    ) -> RunJob:
+        """Ingest the results and close both the job and the run, in one transaction.
+
+        Atomicity is the whole point. If reporting results and finishing the job were
+        two calls, a worker dying between them would leave results stored against an
+        unfinished job — whose lease would later expire, requeue, and ingest a second
+        copy of everything. Because they land together, a job has either reported
+        everything or nothing, and requeuing is always safe.
+        """
+        job = self._claimed_job(job_id, worker_name)
+        run = RunService(self.session).get(job.run_id)
+
+        if results:
+            IngestionService(self.session).ingest(run=run, results=results)
+
+        now = utcnow()
+        job.status = status
+        job.exit_code = exit_code
+        job.output_tail = output_tail
+        job.error = error
+        job.resolved_sha = resolved_sha
+        job.lease_expires_at = None
+        job.finished_at = now
+
+        run.status = "completed" if status == "succeeded" else "errored"
+        run.completed_at = now
+        self.session.flush()
+        return job
+
+    def job_for_run(self, run_id: str) -> RunJob | None:
+        return self.session.scalar(select(RunJob).where(RunJob.run_id == run_id))
+
+    def _claimed_job(self, job_id: str, worker_name: str) -> RunJob:
+        job = self.session.get(RunJob, job_id)
+        if job is None:
+            raise AppError("job_not_found", f"no job {job_id}", 404, {"job_id": job_id})
+        if job.status != "running" or job.claimed_by != worker_name:
+            raise AppError(
+                "job_not_claimed_by_worker",
+                f"job {job_id} is not currently claimed by {worker_name}",
+                409,
+                {"job_id": job_id, "status": job.status, "claimed_by": job.claimed_by},
+            )
+        return job
 
     def _automated_case_keys(self, plan: TestPlan) -> list[str]:
         """The plan's automated cases, in the order the plan froze them."""
