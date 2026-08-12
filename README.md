@@ -139,6 +139,44 @@ excluded from both sides of the ratio, so skipping tests never flatters the numb
 `uncategorized` bucket is useful signal that the rules need extending for your codebase,
 so failures are never forced into a category that does not fit.
 
+## Runner
+
+The platform can execute a plan itself rather than waiting for CI to report. Dispatching
+a plan queues a job; a worker claims it, clones the repository, runs the plan's automated
+cases, and reports the results back.
+
+Configure a project with a repository and a test command, set a shared token, and start a
+worker:
+
+```bash
+export TESTFORGE_RUNNER_TOKEN=$(python -c "import secrets; print(secrets.token_urlsafe(32))")
+make serve                                     # in one shell
+uv run tf-worker --url http://localhost:8000   # in another
+```
+
+Then open the Plans page and press **Run on runner**. The run detail page follows the job
+from `queued` through `running` to `completed` without a refresh.
+
+**Test selection is by case key.** The worker appends `--tf-cases=CHK-1,CHK-3` to your
+command, and the pytest plugin deselects everything not marked with one of those keys.
+A plan case with no marked test simply produces no result and shows as unexecuted — that
+is information, not an error.
+
+**Job status and run status mean different things.** A suite that ran and reported
+failures is a *succeeded job* with a *completed run*. Only infrastructure failure — a
+checkout that failed, a command that was not found, a timeout — fails the job and marks
+its run `errored`.
+
+**S4a runs your command on the worker host with no isolation.** That is what a test
+runner does, but it means you should not point a worker at a repository you do not
+trust, and the repository's dependencies (including `pytest-testforge`) must already be
+installed in the worker's environment. Containerized execution, private-repo
+credentials, and live log streaming are the next slice.
+
+The runner protocol is disabled until `TESTFORGE_RUNNER_TOKEN` is set; those endpoints
+return `503` rather than running unguarded. The token is not authentication — it keeps a
+stray client from claiming your jobs.
+
 ## Design
 
 - Specs: `docs/superpowers/specs/`
