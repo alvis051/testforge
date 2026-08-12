@@ -1,5 +1,6 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
 
+import { ApiError } from "../api/client";
 import { useDispatchPlan, usePlanRuns, usePlans, useProjects } from "../api/queries";
 import { ErrorState } from "../components/ErrorState";
 
@@ -42,15 +43,24 @@ function DispatchButton({
   }
 
   return (
-    <button
-      data-testid="dispatch-button"
-      disabled={dispatch.isPending}
-      onClick={() =>
-        dispatch.mutate(planId, { onSuccess: (run) => navigate(`/runs/${run.id}`) })
-      }
-    >
-      {dispatch.isPending ? "Dispatching…" : "Run on runner"}
-    </button>
+    <>
+      <button
+        data-testid="dispatch-button"
+        disabled={dispatch.isPending}
+        onClick={() =>
+          dispatch.mutate(planId, { onSuccess: (run) => navigate(`/runs/${run.id}`) })
+        }
+      >
+        {dispatch.isPending ? "Dispatching…" : "Run on runner"}
+      </button>
+      {dispatch.isError && (
+        <p data-testid="dispatch-error" style={{ color: "var(--fail)", margin: "0.25rem 0 0" }}>
+          {dispatch.error instanceof ApiError
+            ? dispatch.error.message
+            : "Dispatch failed. Try again."}
+        </p>
+      )}
+    </>
   );
 }
 

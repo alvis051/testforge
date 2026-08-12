@@ -83,7 +83,9 @@ export function useRunResults(runId: string, runStatus?: string) {
     // independent polling intervals.
     queryKey: keys.runResults(runId, runStatus),
     queryFn: () => apiFetch<ResultRow[]>(`/api/runs/${runId}/results`),
-    enabled: Boolean(runStatus),
+    // No `enabled` gate: results don't depend on knowing the run's status to be
+    // fetched, so this fires immediately and in parallel with useRun. runStatus is
+    // only used below to decide whether to keep polling.
     refetchInterval: ACTIVE_STATUSES.includes(runStatus ?? "") ? 3000 : false,
   });
 }

@@ -9,7 +9,7 @@ import { ResultsTable } from "../components/ResultsTable";
 export function RunDetailPage() {
   const { runId = "" } = useParams<{ runId: string }>();
   const { data: run, isLoading, error } = useRun(runId);
-  const { data: results } = useRunResults(runId, run?.status);
+  const { data: results, isLoading: resultsLoading } = useRunResults(runId, run?.status);
 
   if (error) return <ErrorState error={error} />;
   if (isLoading || !run) return <p className="muted">Loading…</p>;
@@ -37,7 +37,9 @@ export function RunDetailPage() {
       )}
 
       <h3>Results</h3>
-      {results && results.length > 0 ? (
+      {resultsLoading ? (
+        <p className="muted">Loading…</p>
+      ) : results && results.length > 0 ? (
         <ResultsTable results={results} />
       ) : (
         <p className="muted">No results recorded.</p>
