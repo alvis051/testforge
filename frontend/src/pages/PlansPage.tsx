@@ -1,6 +1,6 @@
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
-import { usePlanRuns, usePlans } from "../api/queries";
+import { useDispatchPlan, usePlanRuns, usePlans, useProjects } from "../api/queries";
 import { ErrorState } from "../components/ErrorState";
 
 function PlanRuns({ planId }: { planId: string }) {
@@ -17,11 +17,52 @@ function PlanRuns({ planId }: { planId: string }) {
   );
 }
 
+function DispatchButton({
+  planId,
+  projectKey,
+  configured,
+}: {
+  planId: string;
+  projectKey: string;
+  configured: boolean;
+}) {
+  const dispatch = useDispatchPlan(projectKey);
+  const navigate = useNavigate();
+
+  if (!configured) {
+    return (
+      <span
+        className="muted"
+        data-testid="dispatch-disabled"
+        title="Set repo_url and test_command on the project to enable the runner"
+      >
+        no runner config
+      </span>
+    );
+  }
+
+  return (
+    <button
+      data-testid="dispatch-button"
+      disabled={dispatch.isPending}
+      onClick={() =>
+        dispatch.mutate(planId, { onSuccess: (run) => navigate(`/runs/${run.id}`) })
+      }
+    >
+      {dispatch.isPending ? "Dispatching…" : "Run on runner"}
+    </button>
+  );
+}
+
 export function PlansPage() {
   const { projectKey = "" } = useParams<{ projectKey: string }>();
   const { data: plans, isLoading, error } = usePlans(projectKey);
+  const { data: projects } = useProjects();
 
   if (error) return <ErrorState error={error} />;
+
+  const project = projects?.find((p) => p.key === projectKey);
+  const configured = Boolean(project?.repo_url && project?.test_command);
 
   return (
     <>
@@ -38,6 +79,7 @@ export function PlansPage() {
               <th>Cases</th>
               <th>Status</th>
               <th>Runs</th>
+              <th>Runner</th>
             </tr>
           </thead>
           <tbody>
@@ -50,6 +92,13 @@ export function PlansPage() {
                 <td>{plan.status}</td>
                 <td>
                   <PlanRuns planId={plan.id} />
+                </td>
+                <td>
+                  <DispatchButton
+                    planId={plan.id}
+                    projectKey={projectKey}
+                    configured={configured}
+                  />
                 </td>
               </tr>
             ))}

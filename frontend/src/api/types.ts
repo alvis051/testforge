@@ -4,6 +4,8 @@ import type { components } from "./schema";
 export type Project = components["schemas"]["ProjectOut"];
 export type RunListItem = components["schemas"]["RunListItemOut"];
 export type RunSummary = components["schemas"]["RunSummaryOut"];
+export type Run = components["schemas"]["RunOut"];
+export type RunJob = components["schemas"]["RunJobOut"];
 export type ResultRow = components["schemas"]["ResultOut"];
 export type Plan = components["schemas"]["PlanOut"];
 export type PlanCase = components["schemas"]["PlanCaseOut"];

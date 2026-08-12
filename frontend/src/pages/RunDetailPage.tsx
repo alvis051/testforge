@@ -2,13 +2,14 @@ import { Link, useParams } from "react-router-dom";
 
 import { useRun, useRunResults } from "../api/queries";
 import { ErrorState } from "../components/ErrorState";
+import { JobPanel } from "../components/JobPanel";
 import { PlanCoverage } from "../components/PlanCoverage";
 import { ResultsTable } from "../components/ResultsTable";
 
 export function RunDetailPage() {
   const { runId = "" } = useParams<{ runId: string }>();
   const { data: run, isLoading, error } = useRun(runId);
-  const { data: results } = useRunResults(runId);
+  const { data: results } = useRunResults(runId, run?.status);
 
   if (error) return <ErrorState error={error} />;
   if (isLoading || !run) return <p className="muted">Loading…</p>;
@@ -19,11 +20,12 @@ export function RunDetailPage() {
     <>
       <h2 data-testid="run-name">{run.name ?? run.external_id}</h2>
       <p className="muted">
-        {run.status} · {run.source} ·{" "}
+        <span data-testid="run-status">{run.status}</span> · {run.source} ·{" "}
         {new Date(run.started_at).toLocaleString()} ·{" "}
         <Link to={`/projects/${run.project_key}/runs`}>all runs</Link>
       </p>
 
+      {run.job && <JobPanel job={run.job} />}
       {run.plan_progress && <PlanCoverage progress={run.plan_progress} />}
 
       {unresolved.length > 0 && (

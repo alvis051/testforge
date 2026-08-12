@@ -1,7 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { apiFetch } from "./client";
-import type { FailureCategory, FlakyCase, Plan, Project, ResultRow, RunListItem, RunSummary, RunTrendPoint } from "./types";
+import { apiFetch, apiPost } from "./client";
+import type { FailureCategory, FlakyCase, Plan, Project, ResultRow, Run, RunListItem, RunSummary, RunTrendPoint } from "./types";
 
 export type RunFilters = { status?: string; source?: string };
 
@@ -16,7 +16,8 @@ export const keys = {
     ["projects", projectKey, "runs", filters] as const,
   plans: (projectKey: string) => ["projects", projectKey, "plans"] as const,
   run: (runId: string) => ["runs", runId] as const,
-  runResults: (runId: string) => ["runs", runId, "results"] as const,
+  runResults: (runId: string, runStatus?: string) =>
+    ["runs", runId, "results", runStatus] as const,
   planRuns: (planId: string) => ["plans", planId, "runs"] as const,
   insightsFlaky: (projectKey: string) =>
     ["projects", projectKey, "insights", "flaky"] as const,
@@ -61,17 +62,40 @@ export function usePlans(projectKey: string) {
   });
 }
 
+/** Non-terminal run states. Anything else ("completed", "errored") ends the polling. */
+const ACTIVE_STATUSES = ["queued", "running"];
+
 export function useRun(runId: string) {
   return useQuery({
     queryKey: keys.run(runId),
     queryFn: () => apiFetch<RunSummary>(`/api/runs/${runId}`),
+    // A dispatched run changes state with no user action behind it, so the page
+    // follows it until it settles, then stops polling.
+    refetchInterval: (query) =>
+      ACTIVE_STATUSES.includes(query.state.data?.status ?? "") ? 3000 : false,
   });
 }
 
-export function useRunResults(runId: string) {
+export function useRunResults(runId: string, runStatus?: string) {
   return useQuery({
-    queryKey: keys.runResults(runId),
+    // The status is part of the key on purpose: when the run reaches a terminal state
+    // the key changes and the results refetch automatically, with no race between two
+    // independent polling intervals.
+    queryKey: keys.runResults(runId, runStatus),
     queryFn: () => apiFetch<ResultRow[]>(`/api/runs/${runId}/results`),
+    enabled: Boolean(runStatus),
+    refetchInterval: ACTIVE_STATUSES.includes(runStatus ?? "") ? 3000 : false,
+  });
+}
+
+export function useDispatchPlan(projectKey: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (planId: string) => apiPost<Run>(`/api/plans/${planId}/dispatch`, {}),
+    onSuccess: (_run, planId) => {
+      queryClient.invalidateQueries({ queryKey: keys.planRuns(planId) });
+      queryClient.invalidateQueries({ queryKey: ["projects", projectKey, "runs"] });
+    },
   });
 }
 

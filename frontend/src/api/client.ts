@@ -11,11 +11,7 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiFetch<T>(path: string): Promise<T> {
-  const response = await fetch(path, {
-    headers: { Accept: "application/json" },
-  });
-
+async function parse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     let body: unknown = null;
     try {
@@ -41,4 +37,18 @@ export async function apiFetch<T>(path: string): Promise<T> {
     throw new ApiError(response.status, "invalid_response", "Response was not valid JSON", {});
   }
   return data as T;
+}
+
+export async function apiFetch<T>(path: string): Promise<T> {
+  return parse<T>(await fetch(path, { headers: { Accept: "application/json" } }));
+}
+
+export async function apiPost<T>(path: string, body: unknown): Promise<T> {
+  return parse<T>(
+    await fetch(path, {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  );
 }
