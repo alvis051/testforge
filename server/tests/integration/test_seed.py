@@ -79,6 +79,7 @@ def test_seed_is_still_idempotent_including_the_run(db_session):
         "plans": 0,
         "runs": 0,
         "results": 0,
+        "jobs": 0,
     }
 
 
@@ -108,3 +109,24 @@ def test_the_seeded_history_exercises_several_failure_categories(db_session):
     assert "uncategorized" in categories, (
         "one failure deliberately falls through, so the bucket is visible in the demo"
     )
+
+
+def test_the_seed_configures_the_runner_and_leaves_a_finished_job(db_session):
+    from testforge.models.run_job import RunJob
+    from testforge.seed import DEMO_REPO_URL, DEMO_TEST_COMMAND
+
+    counts = seed_demo(db_session)
+    db_session.commit()
+
+    assert counts["jobs"] == 1
+    project = ProjectService(db_session).get_by_key("CHK")
+    assert project.repo_url == DEMO_REPO_URL
+    assert project.test_command == DEMO_TEST_COMMAND
+
+    newest = RunService(db_session).list_for_project(project)[0]
+    assert newest.source == "runner", "the newest seeded run demonstrates the runner"
+
+    job = db_session.query(RunJob).filter(RunJob.run_id == newest.id).one()
+    assert job.status == "succeeded"
+    assert job.resolved_sha is not None
+    assert job.output_tail

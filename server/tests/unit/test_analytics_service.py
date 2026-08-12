@@ -264,3 +264,25 @@ def test_a_project_with_no_history_returns_empty_not_an_error(db_session, projec
     assert service.flaky_cases(project) == []
     assert service.run_trends(project) == []
     assert service.failure_categories(project) == []
+
+
+def test_a_queued_run_does_not_consume_a_slot_in_the_trend_window(db_session, project):
+    make_case(db_session, project, "A")
+    db_session.commit()
+    record(db_session, project, 0, {"CHK-1": "passed"})
+    # A dispatched-but-unstarted run has no data at all. Letting it into the window
+    # would silently blank a slot in the trend for every plan someone dispatches.
+    queued, _ = RunService(db_session).open(
+        project=project,
+        external_id="queued-1",
+        name=None,
+        source="runner",
+        ci_metadata={},
+        actor="local",
+    )
+    queued.status = "queued"
+    db_session.commit()
+
+    trends = AnalyticsService(db_session).run_trends(project)
+
+    assert [p.external_id for p in trends] == ["run-0"]

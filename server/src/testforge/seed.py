@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from testforge.models.project import Project
+from testforge.models.run_job import RunJob
 from testforge.schemas.results import ResultIn
 from testforge.services.case_service import CaseService
 from testforge.services.ingestion_service import IngestionService
@@ -29,6 +30,12 @@ DEMO_STACK_TRACE = """Traceback (most recent call last):
   File "tests/test_checkout.py", line 42, in test_payment_retry_prompt
     assert "Retry payment" in page.text
 AssertionError: assert 'Retry payment' in 'Payment failed. Contact support.'"""
+
+DEMO_REPO_URL = "https://github.com/alvis051/testforge.git"
+DEMO_TEST_COMMAND = "pytest examples/demo_suite -q"
+#: A stand-in commit for the seeded job. Nothing resolves it; it exists so the run
+#: detail page has a realistic value to render.
+DEMO_RESOLVED_SHA = "0f1e2d3c4b5a69788796a5b4c3d2e1f005040302"
 
 DEMO_RUN_COUNT = 6
 
@@ -81,12 +88,24 @@ DEMO_FAILURE_DETAIL = {
 def seed_demo(session: Session) -> dict[str, int]:
     existing = session.scalar(select(Project).where(Project.key == "CHK"))
     if existing is not None:
-        return {"projects": 0, "suites": 0, "cases": 0, "plans": 0, "runs": 0, "results": 0}
+        return {
+            "projects": 0,
+            "suites": 0,
+            "cases": 0,
+            "plans": 0,
+            "runs": 0,
+            "results": 0,
+            "jobs": 0,
+        }
 
     projects = ProjectService(session)
     project = projects.create(
         key="CHK", name="Checkout", description="Demo storefront project", actor="seed"
     )
+    project.repo_url = DEMO_REPO_URL
+    project.default_ref = "main"
+    project.test_command = DEMO_TEST_COMMAND
+    session.flush()
 
     suites = SuiteService(session)
     web = suites.create(project=project, name="Web", parent_id=None, actor="seed")
@@ -163,6 +182,29 @@ def seed_demo(session: Session) -> dict[str, int]:
 
         completed = runs.complete(run.id)
         completed.completed_at = started
+        if index == DEMO_RUN_COUNT - 1:
+            # The newest run is runner-sourced so the job panel has something to show.
+            # Converting a run rather than adding a seventh keeps every existing
+            # assertion — run counts and trend dot counts alike — unchanged.
+            run.source = "runner"
+            session.add(
+                RunJob(
+                    run_id=run.id,
+                    status="succeeded",
+                    repo_url=DEMO_REPO_URL,
+                    git_ref="main",
+                    resolved_sha=DEMO_RESOLVED_SHA,
+                    command=DEMO_TEST_COMMAND,
+                    case_keys_json=["CHK-1", "CHK-2", "CHK-3"],
+                    claimed_by="seed-worker:1",
+                    claimed_at=started,
+                    attempts=1,
+                    exit_code=1,
+                    output_tail="==== 4 passed, 1 failed, 1 skipped in 3.20s ====",
+                    created_at=started,
+                    finished_at=started,
+                )
+            )
         session.flush()
 
     return {
@@ -172,4 +214,5 @@ def seed_demo(session: Session) -> dict[str, int]:
         "plans": 1,
         "runs": DEMO_RUN_COUNT,
         "results": result_count,
+        "jobs": 1,
     }

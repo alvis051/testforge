@@ -120,11 +120,16 @@ class AnalyticsService:
         ]
 
     def _recent_runs(self, project: Project, limit: int) -> list[Run]:
-        """Newest first. Both the trend and the category breakdown read the same
-        window, so the two panels can never disagree about their time range."""
+        """Newest first, completed only.
+
+        Both the trend and the category breakdown read this same window, so the two
+        panels can never disagree about their range. Only completed runs are eligible:
+        a queued run has no data, a running run has misleading partial data, and an
+        errored run has neither — none of them belong in a pass-rate trend.
+        """
         stmt = (
             select(Run)
-            .where(Run.project_id == project.id)
+            .where(Run.project_id == project.id, Run.status == "completed")
             .order_by(Run.started_at.desc(), Run.id.desc())
             .limit(limit)
         )
