@@ -1,11 +1,18 @@
+import contextlib
+import os
+import signal
 import subprocess
 import sys
+import time
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 from testforge_worker.execute import CheckoutError, _read_results, clone, run_job
 
 MARKED_SUITE = """
+import os
+import pathlib
 import subprocess
 import time
 
@@ -34,6 +41,21 @@ def test_leaves_a_grandchild_holding_stdout():
     # runner's pipe stays open. The runner then times out on a child that has
     # already exited.
     subprocess.Popen(["sleep", "300"])
+
+
+@pytest.mark.case("CHK-5")
+def test_leaves_a_descendant_that_escaped_the_process_group():
+    # Strictly harder than CHK-4: the descendant calls setsid() before spawning, so it
+    # leaves the runner's process group entirely. Neither killpg on that group nor a
+    # kill of the direct child can reach it, and it holds the inherited stdout pipe
+    # open for five minutes. Its pid is written where the test can reap it.
+    pid = os.fork()
+    if pid == 0:
+        os.setsid()
+        escaped = subprocess.Popen(["sleep", "300"])
+        pathlib.Path("descendant.pid").write_text(str(escaped.pid))
+        os._exit(0)
+    os.waitpid(pid, 0)
 """
 
 #: Run pytest through the current interpreter so the test does not depend on PATH.
@@ -44,6 +66,32 @@ COMMAND = f"{sys.executable} -m pytest -q -p no:cacheprovider"
 #: ``-s`` leaves fd 1 pointing at the runner's pipe instead of pytest's capture
 #: tempfile, which is what lets a grandchild inherit the pipe itself.
 COMMAND_UNCAPTURED = f"{COMMAND} -s"
+
+
+#: Ceiling for the escaped-descendant timeout path: the job's own 3s timeout, plus the
+#: handler's 5s bounded wait, plus slack for clone and interpreter start-up.
+PROMPT_RETURN_SECONDS = 15
+
+
+@contextlib.contextmanager
+def fail_after(seconds: int) -> Iterator[None]:
+    """Turn a hang into a fast, loud failure instead of a stuck suite.
+
+    ``pytest-timeout`` is not a dependency and the worker package may not grow new
+    ones, so this uses SIGALRM directly. pytest runs tests on the main thread, which is
+    the only place a signal handler can be installed.
+    """
+
+    def on_alarm(signum: int, frame: object) -> None:
+        raise AssertionError(f"call did not return within {seconds}s — it is hanging")
+
+    previous = signal.signal(signal.SIGALRM, on_alarm)
+    signal.alarm(seconds)
+    try:
+        yield
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, previous)
 
 
 @pytest.fixture
@@ -178,6 +226,55 @@ def test_a_timeout_whose_direct_child_already_exited_is_still_reported(demo_repo
         "the scenario only bites once pytest has printed its summary and exited, "
         "leaving the grandchild alone on the pipe"
     )
+
+
+def test_a_timeout_whose_descendant_escaped_the_process_group_returns_promptly(demo_repo, tmp_path):
+    # The worst shape of the timeout path, and the one that used to hang the worker
+    # forever: CHK-5's descendant called setsid(), so it is outside the group killpg
+    # targets, and the direct child is a zombie so killing *it* frees nothing either.
+    # Nothing can force that pipe closed, so the handler must stop waiting on it.
+    workdir = tmp_path / "work"
+    pid_file = workdir / "repo" / "descendant.pid"
+
+    start = time.monotonic()
+    with fail_after(PROMPT_RETURN_SECONDS):
+        execution = run_job(
+            repo_url=str(demo_repo),
+            git_ref="main",
+            command=COMMAND_UNCAPTURED,
+            case_keys=["CHK-5"],
+            workdir=workdir,
+            timeout=3,
+        )
+    elapsed = time.monotonic() - start
+
+    orphan = int(pid_file.read_text()) if pid_file.is_file() else None
+    try:
+        assert elapsed < PROMPT_RETURN_SECONDS, f"returned only after {elapsed:.1f}s"
+        assert execution.status == "failed"
+        assert execution.exit_code is None
+        assert "timed out after 3s" in execution.error
+        # Partial output survives: it comes off the TimeoutExpired the timed-out
+        # communicate() raised, not from a second read the handler can no longer make.
+        assert "passed" in (execution.output_tail or "")
+        assert orphan is not None and _is_alive(orphan), (
+            "the descendant is supposed to be unreachable — if it died, this test is no "
+            "longer exercising the escaped-process-group case it was written for"
+        )
+    finally:
+        if orphan is not None:
+            with contextlib.suppress(ProcessLookupError, PermissionError):
+                os.kill(orphan, signal.SIGKILL)
+
+
+def _is_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
 
 
 @pytest.mark.parametrize(

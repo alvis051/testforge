@@ -127,7 +127,7 @@ def _spawn(argv: list[str], cwd: Path, timeout: int) -> tuple[int | None, str, b
     try:
         output, _ = process.communicate(timeout=timeout)
         return process.returncode, output, False
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
         # Kill the group so a hung pytest cannot leave its own subprocesses behind.
         # The direct child may already be a zombie — when a grandchild rather than
         # pytest itself is what holds the pipe open — and on macOS/BSD looking a
@@ -136,13 +136,23 @@ def _spawn(argv: list[str], cwd: Path, timeout: int) -> tuple[int | None, str, b
         # than crash the worker.
         with contextlib.suppress(ProcessLookupError, PermissionError):
             os.killpg(pgid, signal.SIGKILL)
-        try:
-            output, _ = process.communicate(timeout=30)
-        except subprocess.TimeoutExpired:
-            # Something in the group outlived SIGKILL, e.g. uninterruptible I/O. Stop
-            # waiting on the pipe rather than hang the worker past its lease.
-            process.kill()
-            output, _ = process.communicate()
+        # Nothing here can guarantee the pipe gets closed: a descendant that called
+        # setsid() is outside the group killpg just signalled, and killing the direct
+        # child frees nothing when it is already a zombie. So stop reading rather than
+        # wait on a writer no signal can reach — a second communicate() here is an
+        # unbounded wait, which hangs the worker far past its lease.
+        if process.stdout is not None:
+            process.stdout.close()
+        # communicate() raises with whatever it had already read. Under text=True that
+        # is still bytes: CPython joins the raw chunks on the timeout path and only
+        # decodes on the normal return, so this has to decode for itself.
+        raw = exc.output or b""
+        output = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else raw
+        # Bounded, and a wait() rather than a communicate() so it turns on the child
+        # exiting and not on the pipe. Reaps the direct child when it is reapable;
+        # when it is not, letting it go beats blocking on it.
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            process.wait(timeout=5)
         return None, output, True
 
 
