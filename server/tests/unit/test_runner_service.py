@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 import pytest
+from sqlalchemy import event
 from testforge.db.base import utcnow
 from testforge.errors import AppError
 from testforge.models.run_job import RunJob
@@ -141,6 +142,74 @@ def test_a_second_claim_finds_no_work_rather_than_duplicating_the_job(db_session
     assert first is not None
     assert second is None, "the status guard on the UPDATE is what prevents double execution"
     assert job_for(db_session, run).attempts == 1
+
+
+def test_claim_update_re_checks_status_on_the_row_it_targets(db_session, project, plan):
+    """Proves the outer ``AND status == "queued"`` guard on claim()'s UPDATE is
+    load-bearing -- not merely that the inner subquery finds no more queued rows.
+
+    Why not race two real workers instead? We tried, extensively: sequential
+    calls on one session, real OS threads racing separate connections with a
+    ``threading.Barrier``, and a low-level ``sqlite3.Connection.set_progress_handler``
+    injection to force a second connection's write into the middle of the
+    first's UPDATE. All of it converges on the same result -- confirmed here
+    with the progress-handler probe -- that SQLite acquires the write-intent
+    lock for this whole single-statement UPDATE (subquery included) up front:
+    a second connection's own write attempt fails with "database is locked"
+    from that statement's very first instruction. The subquery's read and the
+    outer guard's re-check are therefore always evaluated against one atomic,
+    unchanging snapshot in this backend -- there is no sequence of calls, on
+    however many sessions, that can make them disagree. The guard's payoff is
+    real on an MVCC backend like Postgres (a second worker's statement can
+    resume against a row that changed underneath it after a lock wait), but
+    SQLite's coarser locking makes that exact window unreachable by any
+    behavioral test here.
+
+    So this test verifies the guard the only way that actually distinguishes
+    "guard present" from "guard absent" in this suite: it captures the literal
+    SQL claim() sends to the database during a real call and asserts the outer
+    UPDATE carries its own ``status = 'queued'`` condition, separate from and
+    in addition to the one inside the id-selecting subquery. Delete the outer
+    condition -- ``.where(RunJob.id == oldest, RunJob.status == "queued")``
+    down to ``.where(RunJob.id == oldest)`` -- and this assertion fails
+    immediately, because the text of the outer WHERE clause changes.
+    """
+    service = RunnerService(db_session)
+    service.dispatch(plan=plan, git_ref=None, name=None, actor="local")
+
+    captured: list[str] = []
+
+    def record_update(conn, cursor, statement, parameters, context, executemany):
+        if "UPDATE run_jobs" in statement:
+            captured.append(statement)
+
+    engine = db_session.get_bind()
+    event.listen(engine, "before_cursor_execute", record_update)
+    try:
+        job = service.claim("worker-a")
+    finally:
+        event.remove(engine, "before_cursor_execute", record_update)
+
+    assert job is not None
+    assert len(captured) == 1, "expected exactly one UPDATE run_jobs statement from claim()"
+
+    # Isolate the outer WHERE clause from the id-selecting subquery's own WHERE:
+    # the first "WHERE" starts the outer clause (which contains the whole
+    # subquery), and the subquery's own closing paren marks where the outer
+    # condition, if any, picks back up.
+    where_clause = captured[0].split("WHERE", 1)[1]
+    subquery_part, _, outer_part = where_clause.partition(")")
+
+    assert "status" in subquery_part, (
+        "sanity check: the subquery that picks the oldest queued row must filter "
+        "by status -- if this fails, the statement shape changed and the split "
+        "below is no longer isolating the right clause"
+    )
+    assert "status" in outer_part, (
+        "the outer UPDATE has no status condition of its own -- without one, the "
+        "UPDATE matches its target purely by id, regardless of whether that row's "
+        "status changed between the subquery picking it and the write landing"
+    )
 
 
 def test_sweep_requeues_a_job_whose_worker_stopped_reporting(db_session, project, plan):
