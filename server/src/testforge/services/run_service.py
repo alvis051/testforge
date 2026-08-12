@@ -149,3 +149,10 @@ class RunService:
                 409,
                 {"run_id": run.id, "status": run.status},
             )
+        if run.status == "errored":
+            raise AppError(
+                "run_errored",
+                f"run {run.id} failed to execute and no longer accepts results",
+                409,
+                {"run_id": run.id, "status": run.status},
+            )

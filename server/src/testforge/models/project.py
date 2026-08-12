@@ -14,3 +14,6 @@ class Project(Base, TimestampMixin):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     case_seq: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_by: Mapped[str] = mapped_column(String(200), nullable=False, default="local")
+    repo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    default_ref: Mapped[str] = mapped_column(String(200), nullable=False, default="main")
+    test_command: Mapped[str | None] = mapped_column(String(500), nullable=True)

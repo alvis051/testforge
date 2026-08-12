@@ -229,3 +229,27 @@ def test_open_for_plan_rejects_an_archived_plan(db_session, project):
 
     assert excinfo.value.code == "plan_archived"
     assert excinfo.value.status_code == 409
+
+
+def test_assert_writable_rejects_an_errored_run(db_session):
+    project = ProjectService(db_session).create(
+        key="ERR", name="Errored", description=None, actor="local"
+    )
+    db_session.flush()
+    service = RunService(db_session)
+    run, _ = service.open(
+        project=project,
+        external_id="err-1",
+        name=None,
+        source="runner",
+        ci_metadata={},
+        actor="local",
+    )
+    run.status = "errored"
+    db_session.flush()
+
+    with pytest.raises(AppError) as exc:
+        service.assert_writable(run)
+
+    assert exc.value.code == "run_errored"
+    assert exc.value.status_code == 409
