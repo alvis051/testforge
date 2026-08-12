@@ -8,16 +8,18 @@ dependencies = []
 package = false
 
 [tool.uv.workspace]
-members = ["server", "plugin"]
+members = ["server", "plugin", "worker"]
 
 [tool.uv.sources]
 testforge = { workspace = true }
 pytest-testforge = { workspace = true }
+testforge-worker = { workspace = true }
 
 [dependency-groups]
 dev = [
     "testforge",
     "pytest-testforge",
+    "testforge-worker",
     "pytest>=9.1.1",
     "ruff>=0.16.1",
     "httpx2>=2.9.1",
@@ -41,4 +43,4 @@ extend-immutable-calls = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["server/tests", "plugin/tests"]
+testpaths = ["server/tests", "plugin/tests", "worker/tests"]

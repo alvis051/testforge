@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 members = [
     "pytest-testforge",
     "testforge",
+    "testforge-worker",
     "testforge-workspace",
 ]
 
@@ -647,6 +648,21 @@ requires-dist = [
 ]
 
 [[package]]
+name = "testforge-worker"
+version = "0.1.0"
+source = { editable = "worker" }
+dependencies = [
+    { name = "httpx" },
+    { name = "typer" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.28" },
+    { name = "typer", specifier = ">=0.15" },
+]
+
+[[package]]
 name = "testforge-workspace"
 version = "0.0.0"
 source = { virtual = "." }
@@ -658,6 +674,7 @@ dev = [
     { name = "pytest-testforge" },
     { name = "ruff" },
     { name = "testforge" },
+    { name = "testforge-worker" },
 ]
 
 [package.metadata]
@@ -669,6 +686,7 @@ dev = [
     { name = "pytest-testforge", editable = "plugin" },
     { name = "ruff", specifier = ">=0.16.1" },
     { name = "testforge", editable = "server" },
+    { name = "testforge-worker", editable = "worker" },
 ]
 
 [[package]]
