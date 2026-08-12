@@ -148,3 +148,42 @@ def test_unreachable_server_warns_but_does_not_fail_the_run(pytester):
 
     assert result.ret == 0
     result.stdout.fnmatch_lines(["*testforge: could not report results*"])
+
+
+def test_tf_cases_runs_only_tests_marked_with_those_keys(pytester, tmp_path):
+    pytester.makepyfile(test_suite=SUITE)
+    out = tmp_path / "results.json"
+
+    result = pytester.runpytest(
+        "--tf-offline", str(out), "--tf-project", "CHK", "--tf-cases", "CHK-1,CHK-3"
+    )
+
+    result.assert_outcomes(passed=2, deselected=2)
+    payload = json.loads(out.read_text())
+    # CHK-4 rides along because one selected test covers both CHK-3 and CHK-4 —
+    # selection is per test, and a test cannot run for only some of its cases.
+    assert {r["case_key"] for r in payload["results"]} == {"CHK-1", "CHK-3", "CHK-4"}
+
+
+def test_tf_cases_matching_nothing_collects_nothing(pytester, tmp_path):
+    pytester.makepyfile(test_suite=SUITE)
+    out = tmp_path / "results.json"
+
+    result = pytester.runpytest(
+        "--tf-offline", str(out), "--tf-project", "CHK", "--tf-cases", "CHK-999"
+    )
+
+    assert result.ret == 5, (
+        "pytest exits 5 when nothing is collected; the worker maps that to a clean "
+        "zero-result run, not a broken job"
+    )
+    assert json.loads(out.read_text())["results"] == []
+
+
+def test_collection_is_untouched_when_tf_cases_is_absent(pytester, tmp_path):
+    pytester.makepyfile(test_suite=SUITE)
+    out = tmp_path / "results.json"
+
+    result = pytester.runpytest("--tf-offline", str(out), "--tf-project", "CHK")
+
+    result.assert_outcomes(passed=3, failed=1)

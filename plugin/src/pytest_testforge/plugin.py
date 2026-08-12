@@ -23,6 +23,11 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     group.addoption("--tf-external-id", default=None, help="Stable id for this run")
     group.addoption("--tf-run-name", default=None, help="Human-readable run name")
     group.addoption("--tf-offline", default=None, help="Write the payload to this path instead")
+    group.addoption(
+        "--tf-cases",
+        default=None,
+        help="Comma-separated case keys; deselect every test not marked with one of them",
+    )
     group.addoption("--tf-actor", default=os.environ.get("TESTFORGE_ACTOR", "local"))
 
 
@@ -34,6 +39,30 @@ def pytest_configure(config: pytest.Config) -> None:
 
 def _case_keys(item: pytest.Item) -> list[str]:
     return [mark.args[0] for mark in item.iter_markers(name="case") if mark.args]
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Restrict the session to tests marked with one of ``--tf-cases``.
+
+    Selection is by case key rather than node id because a case key never changes,
+    while node ids move the moment a test is renamed or reparametrized.
+    """
+    raw = config.getoption("--tf-cases")
+    if not raw:
+        return
+
+    wanted = {key.strip() for key in raw.split(",") if key.strip()}
+    if not wanted:
+        return
+
+    selected: list[pytest.Item] = []
+    deselected: list[pytest.Item] = []
+    for item in items:
+        (selected if wanted.intersection(_case_keys(item)) else deselected).append(item)
+
+    if deselected:
+        config.hook.pytest_deselected(items=deselected)
+        items[:] = selected
 
 
 def _failure_details(report, call: pytest.CallInfo) -> tuple[str | None, str | None, str | None]:
