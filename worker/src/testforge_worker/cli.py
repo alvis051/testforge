@@ -8,7 +8,7 @@ from pathlib import Path
 import typer
 
 from testforge_worker.client import RunnerClient
-from testforge_worker.execute import run_job
+from testforge_worker.execute import Execution, run_job
 
 app = typer.Typer(help="TestForge runner worker")
 
@@ -47,6 +47,12 @@ def process_one(client: RunnerClient, worker_name: str, timeout: int) -> bool:
                 workdir=Path(tmp),
                 timeout=timeout,
             )
+    except Exception as exc:  # noqa: BLE001 — an unexpected failure must still report
+        # Anything run_job did not turn into an Execution itself — an unwritable
+        # workdir, a spawn that blew up — becomes a failed job. Letting it escape would
+        # kill the worker and strand the job as `running` until its lease expired, only
+        # for the requeue to hit the same failure on the next worker.
+        execution = Execution(status="failed", error=f"unexpected worker error: {exc}")
     finally:
         stop.set()
 

@@ -1,5 +1,6 @@
 """Checkout and execution. Nothing in this module talks to the platform."""
 
+import contextlib
 import json
 import os
 import shlex
@@ -120,14 +121,28 @@ def _spawn(argv: list[str], cwd: Path, timeout: int) -> tuple[int | None, str, b
         text=True,
         start_new_session=True,
     )
+    # start_new_session makes the child its own group leader, so its pid *is* the pgid.
+    # Taking it here rather than looking it up later removes the race entirely.
+    pgid = process.pid
     try:
         output, _ = process.communicate(timeout=timeout)
         return process.returncode, output, False
     except subprocess.TimeoutExpired:
-        # start_new_session gave the child its own process group; kill the group so a
-        # hung pytest cannot leave its own subprocesses behind.
-        os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-        output, _ = process.communicate()
+        # Kill the group so a hung pytest cannot leave its own subprocesses behind.
+        # The direct child may already be a zombie — when a grandchild rather than
+        # pytest itself is what holds the pipe open — and on macOS/BSD looking a
+        # zombie's pgid up raises ProcessLookupError (Linux tolerates it). That is the
+        # orphaned-subprocess case this kill exists for, so it must be survived rather
+        # than crash the worker.
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.killpg(pgid, signal.SIGKILL)
+        try:
+            output, _ = process.communicate(timeout=30)
+        except subprocess.TimeoutExpired:
+            # Something in the group outlived SIGKILL, e.g. uninterruptible I/O. Stop
+            # waiting on the pipe rather than hang the worker past its lease.
+            process.kill()
+            output, _ = process.communicate()
         return None, output, True
 
 
@@ -135,14 +150,18 @@ def _read_results(path: Path) -> list[dict]:
     """The plugin writes a whole payload; the runner needs only its results array.
 
     A missing or unreadable file is normal when the command died before session finish,
-    and means zero results rather than an error.
+    and means zero results rather than an error. That promise covers a file that is not
+    the shape the plugin writes at all: a truncated write can leave valid JSON of the
+    wrong type, where subscripting raises TypeError rather than KeyError, and a
+    ``results`` key holding a non-list would break the caller's contract further down.
     """
     if not path.is_file():
         return []
     try:
-        return json.loads(path.read_text())["results"]
-    except (OSError, ValueError, KeyError):
+        results = json.loads(path.read_text())["results"]
+    except (OSError, ValueError, KeyError, TypeError):
         return []
+    return results if isinstance(results, list) else []
 
 
 def _tail(text: str) -> str | None:
