@@ -10,6 +10,7 @@ from testforge.db.base import utcnow
 from testforge.models.case import TestCase
 from testforge.models.run import Result, Run
 from testforge.schemas.results import IngestSummary, ResultBatch
+from testforge.schemas.runner import RunJobOut
 from testforge.schemas.runs import (
     AutomationLinkOut,
     ManualExecute,
@@ -28,6 +29,7 @@ from testforge.services.manual_service import ManualExecutionService
 from testforge.services.plan_service import PlanService
 from testforge.services.project_service import ProjectService
 from testforge.services.run_service import RunService
+from testforge.services.runner_service import RunnerService
 
 router = APIRouter(tags=["runs"])
 
@@ -191,12 +193,14 @@ def get_run(run_id: str, session: Session = Depends(get_session)) -> RunSummaryO
     run = RunService(session).get(run_id)
     results = IngestionService(session).results_for_run(run)
     outcomes = Counter(result.outcome for result in results)
+    job = RunnerService(session).job_for_run(run.id)
     return RunSummaryOut(
         **run_out_for(session, run).model_dump(),
         total_results=len(results),
         unresolved_count=sum(1 for r in results if r.test_case_id is None),
         by_outcome=dict(outcomes),
         plan_progress=_plan_progress(session, run, results),
+        job=RunJobOut.model_validate(job) if job is not None else None,
     )
 
 

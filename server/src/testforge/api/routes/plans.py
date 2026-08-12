@@ -5,10 +5,12 @@ from testforge.api.deps import get_actor, get_session
 from testforge.api.routes.runs import build_run_list_items, run_out
 from testforge.models.case import TestCase
 from testforge.schemas.plans import PlanCaseOut, PlanCreate, PlanOut, PlanRunCreate
+from testforge.schemas.runner import PlanDispatch
 from testforge.schemas.runs import RunListItemOut, RunOut
 from testforge.services.plan_service import PlanService
 from testforge.services.project_service import ProjectService
 from testforge.services.run_service import RunService
+from testforge.services.runner_service import RunnerService
 
 router = APIRouter(tags=["plans"])
 
@@ -131,3 +133,23 @@ def list_plan_runs(
     project = ProjectService(session).get(plan.project_id)
     service = RunService(session)
     return build_run_list_items(service, service.list_for_plan(plan_id, limit=limit), project.key)
+
+
+@router.post("/api/plans/{plan_id}/dispatch", response_model=RunOut, status_code=201)
+def dispatch_plan(
+    plan_id: str,
+    payload: PlanDispatch,
+    session: Session = Depends(get_session),
+    actor: str = Depends(get_actor),
+) -> RunOut:
+    """Queue a plan's automated cases for the runner.
+
+    Not behind the runner token: this is a user action from the browser, which has no
+    way to hold a worker credential.
+    """
+    plan = PlanService(session).get(plan_id)
+    project = ProjectService(session).get(plan.project_id)
+    run = RunnerService(session).dispatch(
+        plan=plan, git_ref=payload.git_ref, name=payload.name, actor=actor
+    )
+    return run_out(run, project.key)

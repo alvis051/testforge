@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from testforge.schemas.runner import RunJobOut
+
 
 class RunCreate(BaseModel):
     external_id: str = Field(min_length=1, max_length=200)
@@ -45,6 +47,7 @@ class RunSummaryOut(RunOut):
     unresolved_count: int
     by_outcome: dict[str, int]
     plan_progress: PlanProgress | None = None
+    job: RunJobOut | None = None
 
 
 class ResultOut(BaseModel):

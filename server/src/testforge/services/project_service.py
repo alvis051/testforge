@@ -9,13 +9,31 @@ class ProjectService:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def create(self, *, key: str, name: str, description: str | None, actor: str) -> Project:
+    def create(
+        self,
+        *,
+        key: str,
+        name: str,
+        description: str | None,
+        actor: str,
+        repo_url: str | None = None,
+        default_ref: str = "main",
+        test_command: str | None = None,
+    ) -> Project:
         existing = self.session.scalar(select(Project).where(Project.key == key))
         if existing is not None:
             raise AppError(
                 "duplicate_project_key", f"project key {key} already exists", 409, {"key": key}
             )
-        project = Project(key=key, name=name, description=description, created_by=actor)
+        project = Project(
+            key=key,
+            name=name,
+            description=description,
+            created_by=actor,
+            repo_url=repo_url,
+            default_ref=default_ref,
+            test_command=test_command,
+        )
         self.session.add(project)
         self.session.flush()
         return project

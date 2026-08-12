@@ -141,6 +141,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plans/{plan_id}/dispatch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dispatch Plan
+         * @description Queue a plan's automated cases for the runner.
+         *
+         *     Not behind the runner token: this is a user action from the browser, which has no
+         *     way to hold a worker credential.
+         */
+        post: operations["dispatch_plan_api_plans__plan_id__dispatch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plans/{plan_id}/runs": {
         parameters: {
             query?: never;
@@ -328,6 +351,57 @@ export interface paths {
         put?: never;
         /** Create Suite */
         post: operations["create_suite_api_projects__project_key__suites_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runner/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Claim Job */
+        post: operations["claim_job_api_runner_claim_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runner/jobs/{job_id}/finish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Finish Job */
+        post: operations["finish_job_api_runner_jobs__job_id__finish_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runner/jobs/{job_id}/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Heartbeat Job */
+        post: operations["heartbeat_job_api_runner_jobs__job_id__heartbeat_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -702,6 +776,13 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** PlanDispatch */
+        PlanDispatch: {
+            /** Git Ref */
+            git_ref?: string | null;
+            /** Name */
+            name?: string | null;
+        };
         /** PlanOut */
         PlanOut: {
             /** Archived At */
@@ -752,12 +833,21 @@ export interface components {
         };
         /** ProjectCreate */
         ProjectCreate: {
+            /**
+             * Default Ref
+             * @default main
+             */
+            default_ref: string;
             /** Description */
             description?: string | null;
             /** Key */
             key: string;
             /** Name */
             name: string;
+            /** Repo Url */
+            repo_url?: string | null;
+            /** Test Command */
+            test_command?: string | null;
         };
         /** ProjectOut */
         ProjectOut: {
@@ -770,6 +860,8 @@ export interface components {
             created_at: string;
             /** Created By */
             created_by: string;
+            /** Default Ref */
+            default_ref: string;
             /** Description */
             description: string | null;
             /** Id */
@@ -778,6 +870,10 @@ export interface components {
             key: string;
             /** Name */
             name: string;
+            /** Repo Url */
+            repo_url: string | null;
+            /** Test Command */
+            test_command: string | null;
         };
         /** ResultBatch */
         ResultBatch: {
@@ -865,6 +961,37 @@ export interface components {
              */
             source: "ci" | "local" | "manual" | "runner";
         };
+        /**
+         * RunJobOut
+         * @description The job as the dashboard shows it.
+         */
+        RunJobOut: {
+            /** Attempts */
+            attempts: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Error */
+            error: string | null;
+            /** Exit Code */
+            exit_code: number | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Git Ref */
+            git_ref: string;
+            /** Id */
+            id: string;
+            /** Output Tail */
+            output_tail: string | null;
+            /** Repo Url */
+            repo_url: string;
+            /** Resolved Sha */
+            resolved_sha: string | null;
+            /** Status */
+            status: string;
+        };
         /** RunListItemOut */
         RunListItemOut: {
             /** By Outcome */
@@ -941,6 +1068,7 @@ export interface components {
             external_id: string;
             /** Id */
             id: string;
+            job?: components["schemas"]["RunJobOut"] | null;
             /** Name */
             name: string | null;
             /** Plan Id */
@@ -985,6 +1113,59 @@ export interface components {
             started_at: string;
             /** Total */
             total: number;
+        };
+        /** RunnerClaim */
+        RunnerClaim: {
+            /** Worker Name */
+            worker_name: string;
+        };
+        /** RunnerFinish */
+        RunnerFinish: {
+            /** Error */
+            error?: string | null;
+            /** Exit Code */
+            exit_code?: number | null;
+            /** Output Tail */
+            output_tail?: string | null;
+            /** Resolved Sha */
+            resolved_sha?: string | null;
+            /** Results */
+            results?: components["schemas"]["ResultIn"][];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "succeeded" | "failed";
+            /** Worker Name */
+            worker_name: string;
+        };
+        /** RunnerHeartbeat */
+        RunnerHeartbeat: {
+            /** Worker Name */
+            worker_name: string;
+        };
+        /**
+         * RunnerJobOut
+         * @description Everything a worker needs to execute one job, and nothing else.
+         */
+        RunnerJobOut: {
+            /** Case Keys */
+            case_keys: string[];
+            /** Command */
+            command: string;
+            /** Git Ref */
+            git_ref: string;
+            /** Job Id */
+            job_id: string;
+            /**
+             * Lease Expires At
+             * Format: date-time
+             */
+            lease_expires_at: string;
+            /** Repo Url */
+            repo_url: string;
+            /** Run Id */
+            run_id: string;
         };
         /** Step */
         Step: {
@@ -1341,6 +1522,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlanCaseOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dispatch_plan_api_plans__plan_id__dispatch_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-actor"?: string | null;
+            };
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanDispatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
                 };
             };
             /** @description Validation Error */
@@ -1919,6 +2137,111 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SuiteOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    claim_job_api_runner_claim_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunnerClaim"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunnerJobOut"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    finish_job_api_runner_jobs__job_id__finish_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunnerFinish"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    heartbeat_job_api_runner_jobs__job_id__heartbeat_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunnerHeartbeat"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

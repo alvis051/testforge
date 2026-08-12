@@ -8,6 +8,7 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./testforge.db"
     frontend_dist: str | None = None
+    runner_token: str | None = None
 
 
 @lru_cache

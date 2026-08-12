@@ -15,7 +15,13 @@ def create_project(
     actor: str = Depends(get_actor),
 ) -> ProjectOut:
     project = ProjectService(session).create(
-        key=payload.key, name=payload.name, description=payload.description, actor=actor
+        key=payload.key,
+        name=payload.name,
+        description=payload.description,
+        actor=actor,
+        repo_url=payload.repo_url,
+        default_ref=payload.default_ref,
+        test_command=payload.test_command,
     )
     return ProjectOut.model_validate(project)
 
