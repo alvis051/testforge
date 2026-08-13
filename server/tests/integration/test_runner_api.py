@@ -49,6 +49,14 @@ def test_the_protocol_is_disabled_when_no_token_is_configured(tmp_path):
     assert response.json()["code"] == "runner_not_configured"
 
 
+def test_heartbeat_is_disabled_when_no_token_is_configured(tmp_path):
+    with build_client(tmp_path, token=None) as client:
+        response = client.post("/api/runner/jobs/some-job/heartbeat", json={"worker_name": "w"})
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "runner_not_configured"
+
+
 def test_dispatch_still_works_without_a_runner_token(tmp_path):
     with build_client(tmp_path, token=None) as client:
         plan_id = seed_plan(client)
@@ -89,6 +97,31 @@ def test_dispatch_then_claim_hands_the_worker_everything_it_needs(runner_client)
     assert job["git_ref"] == "main"
     assert job["command"] == "pytest -q"
     assert job["case_keys"] == ["CHK-1"], "the manual case is not dispatched"
+
+
+def test_heartbeat_extends_the_lease_and_is_worker_scoped(runner_client):
+    plan_id = seed_plan(runner_client)
+    runner_client.post(f"/api/plans/{plan_id}/dispatch", json={})
+    job = runner_client.post(
+        "/api/runner/claim", json={"worker_name": "worker-a"}, headers=AUTH
+    ).json()
+
+    response = runner_client.post(
+        f"/api/runner/jobs/{job['job_id']}/heartbeat",
+        headers=AUTH,
+        json={"worker_name": "worker-a"},
+    )
+
+    assert response.status_code == 204
+
+    wrong_worker = runner_client.post(
+        f"/api/runner/jobs/{job['job_id']}/heartbeat",
+        headers=AUTH,
+        json={"worker_name": "worker-b"},
+    )
+
+    assert wrong_worker.status_code == 409
+    assert wrong_worker.json()["code"] == "job_not_claimed_by_worker"
 
 
 def test_finish_ingests_results_and_shows_the_job_on_the_run(runner_client):
