@@ -58,3 +58,17 @@ Every result source (plugin upload, JUnit import, runner worker) ends up in `Ing
 ## Design docs
 
 Specs and implementation plans per slice live in `docs/superpowers/specs/` and `docs/superpowers/plans/`. The overall product decomposition (S1–S8) is in `docs/superpowers/specs/2026-08-02-test-management-core-design.md`. Read the relevant spec before changing behaviour in that area.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues on `alvis051/testforge` (via `gh` locally, GitHub MCP tools in cloud sessions). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
